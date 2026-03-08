@@ -4,7 +4,7 @@ export class InputController {
   private readonly slotQueue: number[] = []
   private primaryActionQueued = false
   private secondaryActionQueued = false
-  private readonly touchMode = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+  private readonly touchMode = isTouchUiPreferred()
   private touchMoveAxes = { strafe: 0, forward: 0 }
   private touchLookDelta = { x: 0, y: 0 }
   private touchSneaking = false
@@ -165,4 +165,19 @@ export class InputController {
   private readonly handleContextMenu = (event: MouseEvent): void => {
     event.preventDefault()
   }
+}
+
+function isTouchUiPreferred(): boolean {
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches
+  const finePointer = window.matchMedia('(pointer: fine)').matches
+
+  if (coarsePointer) {
+    return true
+  }
+
+  if (finePointer) {
+    return false
+  }
+
+  return window.innerWidth <= 900 && navigator.maxTouchPoints > 0
 }

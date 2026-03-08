@@ -246,6 +246,10 @@ button {
   cursor: default;
 }
 
+.game-shell:not(.touch-mode) .mobile-controls {
+  display: none;
+}
+
 .touch-mode .top-left {
   top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
   max-width: min(17rem, calc(100vw - 1rem));
