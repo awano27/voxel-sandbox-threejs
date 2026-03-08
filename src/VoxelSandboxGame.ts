@@ -28,6 +28,7 @@ export class VoxelSandboxGame {
   private readonly positionLabel = document.createElement('span')
   private readonly targetLabel = document.createElement('span')
   private readonly lockBadge = document.createElement('span')
+  private readonly cameraLabel = document.createElement('span')
   private readonly hotbarButtons: HTMLButtonElement[] = []
   private currentTarget: VoxelHit | null = null
   private selectedSlot = 0
@@ -52,6 +53,7 @@ export class VoxelSandboxGame {
     this.world = new World(this.scene)
     this.player = new Player(this.camera, this.renderer.domElement, this.world.getSpawnPoint())
     this.world.primeAround(this.player.position)
+    this.scene.add(this.player.avatar.root)
 
     this.input = new InputController(() => this.player.controls.lock())
     this.mountNode.classList.toggle('touch-mode', this.input.isTouchMode())
@@ -88,6 +90,7 @@ export class VoxelSandboxGame {
     this.player.controls.removeEventListener('unlock', this.syncLockState)
     this.highlight.geometry.dispose()
     ;(this.highlight.material as THREE.Material).dispose()
+    this.player.avatar.dispose()
     this.world.dispose()
     this.renderer.dispose()
   }
@@ -105,6 +108,10 @@ export class VoxelSandboxGame {
 
     if (slotSelection !== null) {
       this.updateSelectedSlot(slotSelection)
+    }
+
+    if (this.input.consumeCameraToggle()) {
+      this.player.toggleCameraMode()
     }
 
     this.updateTarget()
@@ -128,23 +135,23 @@ export class VoxelSandboxGame {
     const touchMode = this.input.isTouchMode()
     const title = touchMode ? 'Touch To Roam' : 'Click To Drop In'
     const intro = touchMode
-      ? '左親指で移動、右親指で視点。JUMP / BREAK / PLACE / SNEAK ボタンでスマホからそのまま遊べます。'
-      : 'Pointer Lockで視点を固定。ESCで解除。地形は毎回同じシードで即ロードされます。'
+      ? '左スティックで移動、右LOOKで視点操作。CAMで一人称と三人称を切り替えられます。'
+      : 'Pointer Lockで視点を固定。Vキーで一人称と三人称を切り替えて、ブロッキーなアバターの動きを確認できます。'
     const controls = touchMode
       ? `
         <li>左スティック: 移動</li>
-        <li>右パッド: 視点移動</li>
+        <li>右LOOK: 視点移動</li>
         <li>JUMP: ジャンプ</li>
         <li>BREAK / PLACE: 破壊 / 設置</li>
-        <li>SNEAK: スニーク</li>
+        <li>SNEAK / CAM: スニーク / カメラ切替</li>
       `
       : `
         <li>WASD: 移動</li>
         <li>Shift: スニーク</li>
         <li>Space: ジャンプ</li>
-        <li>左クリック: 破壊</li>
-        <li>右クリック: 設置</li>
+        <li>左クリック / 右クリック: 破壊 / 設置</li>
         <li>1-5: ブロック切替</li>
+        <li>V: 一人称 / 三人称</li>
       `
 
     this.startCard.className = 'start-card'
@@ -161,10 +168,12 @@ export class VoxelSandboxGame {
     header.className = 'panel top-left'
     this.lockBadge.className = 'badge'
     this.lockBadge.textContent = 'PAUSED'
+    this.cameraLabel.className = 'camera-chip'
+    this.cameraLabel.textContent = 'FIRST PERSON'
     this.chunkCounter.textContent = 'Chunks: 0'
     this.positionLabel.textContent = 'Pos: 0, 0, 0'
     this.targetLabel.textContent = 'Target: none'
-    header.append(this.lockBadge, this.chunkCounter, this.positionLabel, this.targetLabel)
+    header.append(this.lockBadge, this.cameraLabel, this.chunkCounter, this.positionLabel, this.targetLabel)
 
     const hotbar = document.createElement('div')
     hotbar.className = 'hotbar'
@@ -197,7 +206,7 @@ export class VoxelSandboxGame {
 
   private updateTarget(): void {
     this.currentTarget = traceVoxelRay(
-      this.camera.position,
+      this.player.getInteractionOrigin(),
       this.player.getLookDirection(),
       MAX_INTERACTION_DISTANCE,
       (x, y, z) => this.world.getBlock(x, y, z),
@@ -255,6 +264,7 @@ export class VoxelSandboxGame {
 
   private updateHud(): void {
     const position = this.player.position
+    this.cameraLabel.textContent = this.player.currentCameraMode === 'third-person' ? 'THIRD PERSON' : 'FIRST PERSON'
     this.chunkCounter.textContent = `Chunks: ${this.world.getLoadedChunkCount()}`
     this.positionLabel.textContent = `Pos: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`
     this.targetLabel.textContent = this.currentTarget
@@ -293,6 +303,7 @@ export class VoxelSandboxGame {
         ready: true,
         locked: this.player.isLocked,
         touchMode: this.input.isTouchMode(),
+        cameraMode: this.player.currentCameraMode,
         selectedSlot: this.selectedSlot,
         selectedBlock: getBlockDefinition(HOTBAR_BLOCKS[this.selectedSlot]).label,
         loadedChunks: this.world.getLoadedChunkCount(),
@@ -339,6 +350,7 @@ export class VoxelSandboxGame {
       <button id="action-place" class="action-btn action-place" type="button">PLACE</button>
       <button id="action-jump" class="action-btn action-jump" type="button">JUMP</button>
       <button id="action-sneak" class="action-btn action-sneak" type="button">SNEAK</button>
+      <button id="action-camera" class="action-btn action-camera" type="button">CAM</button>
     `
 
     this.bindJoystick(joystick, joystickThumb)
@@ -463,8 +475,9 @@ export class VoxelSandboxGame {
     const placeButton = actions.querySelector<HTMLButtonElement>('#action-place')
     const jumpButton = actions.querySelector<HTMLButtonElement>('#action-jump')
     const sneakButton = actions.querySelector<HTMLButtonElement>('#action-sneak')
+    const cameraButton = actions.querySelector<HTMLButtonElement>('#action-camera')
 
-    if (!breakButton || !placeButton || !jumpButton || !sneakButton) {
+    if (!breakButton || !placeButton || !jumpButton || !sneakButton || !cameraButton) {
       throw new Error('Missing touch action buttons')
     }
 
@@ -479,6 +492,7 @@ export class VoxelSandboxGame {
     tapAction(breakButton, () => this.input.queueTouchPrimaryAction())
     tapAction(placeButton, () => this.input.queueTouchSecondaryAction())
     tapAction(jumpButton, () => this.input.queueTouchJump())
+    tapAction(cameraButton, () => this.input.queueTouchCameraToggle())
 
     let sneakPointerId: number | null = null
 

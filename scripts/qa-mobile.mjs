@@ -15,6 +15,10 @@ try {
     const state = window.__VOXEL_DEBUG__?.getState()
     return Boolean(state && state.touchMode && state.loadedChunks > 0)
   })
+  await page.locator('#action-camera').click()
+  await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'third-person')
+  await page.locator('#action-camera').click()
+  await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'first-person')
 
   const initialState = await readDebugState(page)
   await dragControl(page, '#look-zone', { x: -80, y: -36 }, 180)

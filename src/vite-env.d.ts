@@ -3,6 +3,7 @@ interface VoxelDebugApi {
     ready: boolean
     locked: boolean
     touchMode: boolean
+    cameraMode: 'first-person' | 'third-person'
     selectedSlot: number
     selectedBlock: string
     loadedChunks: number

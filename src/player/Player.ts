@@ -13,13 +13,21 @@ import {
 } from '../constants'
 import type { World } from '../world/World'
 import type { InputController } from './InputController'
+import { PlayerAvatar } from './PlayerAvatar'
+
+export type CameraMode = 'first-person' | 'third-person'
 
 export class Player {
   readonly controls: PointerLockControls
+  readonly avatar = new PlayerAvatar()
   readonly velocity = new THREE.Vector3()
   readonly cameraDirection = new THREE.Vector3()
+  private readonly bodyPosition: THREE.Vector3
   private grounded = false
   private readonly lookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
+  private cameraMode: CameraMode = 'first-person'
+  private readonly thirdPersonOffset = new THREE.Vector3(0, 0.9, 4.6)
+  private readonly thirdPersonCameraPosition = new THREE.Vector3()
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -27,16 +35,22 @@ export class Player {
     spawnPoint: THREE.Vector3,
   ) {
     this.controls = new PointerLockControls(this.camera, domElement)
-    this.camera.position.copy(spawnPoint)
+    this.bodyPosition = spawnPoint.clone()
     this.camera.rotation.x = -0.24
+    this.lookEuler.copy(this.camera.rotation)
+    this.updateCameraTransform()
   }
 
   get position(): THREE.Vector3 {
-    return this.camera.position
+    return this.bodyPosition
   }
 
   get isLocked(): boolean {
     return this.controls.isLocked
+  }
+
+  get currentCameraMode(): CameraMode {
+    return this.cameraMode
   }
 
   update(deltaSeconds: number, input: InputController, world: World): void {
@@ -75,10 +89,30 @@ export class Player {
     this.moveWithCollisions(world, this.velocity.x * deltaSeconds, 'x')
     this.moveWithCollisions(world, this.velocity.z * deltaSeconds, 'z')
     this.moveWithCollisions(world, this.velocity.y * deltaSeconds, 'y')
+    this.updateCameraTransform()
+    this.updateAvatar(deltaSeconds)
   }
 
   getLookDirection(): THREE.Vector3 {
     return this.camera.getWorldDirection(this.cameraDirection).normalize()
+  }
+
+  getInteractionOrigin(): THREE.Vector3 {
+    if (this.cameraMode === 'third-person') {
+      return this.bodyPosition
+    }
+
+    return this.camera.position
+  }
+
+  setCameraMode(mode: CameraMode): void {
+    this.cameraMode = mode
+    this.updateCameraTransform()
+    this.updateAvatar(0)
+  }
+
+  toggleCameraMode(): void {
+    this.setCameraMode(this.cameraMode === 'first-person' ? 'third-person' : 'first-person')
   }
 
   private applyLookDelta(deltaX: number, deltaY: number): void {
@@ -100,7 +134,7 @@ export class Player {
       return
     }
 
-    const position = this.camera.position.clone()
+    const position = this.bodyPosition.clone()
     position[axis] += amount
     const aabb = createAabb(position)
 
@@ -138,7 +172,7 @@ export class Player {
       }
     }
 
-    this.camera.position[axis] = position[axis]
+    this.bodyPosition[axis] = position[axis]
 
     if (collided && axis === 'y') {
       if (amount < 0) {
@@ -149,6 +183,34 @@ export class Player {
     } else if (axis === 'y') {
       this.grounded = false
     }
+  }
+
+  private updateCameraTransform(): void {
+    if (this.cameraMode === 'first-person') {
+      this.camera.position.copy(this.bodyPosition)
+      return
+    }
+
+    this.thirdPersonCameraPosition.copy(this.thirdPersonOffset).applyQuaternion(this.camera.quaternion)
+    this.camera.position.copy(this.bodyPosition).add(this.thirdPersonCameraPosition)
+  }
+
+  private updateAvatar(deltaSeconds: number): void {
+    const horizontalSpeed = Math.hypot(this.velocity.x, this.velocity.z)
+    const desiredYaw =
+      horizontalSpeed > 0.08
+        ? Math.atan2(this.velocity.x, this.velocity.z)
+        : Math.atan2(this.getLookDirection().x, this.getLookDirection().z)
+
+    this.avatar.update({
+      position: this.bodyPosition,
+      facingYaw: desiredYaw,
+      horizontalSpeed,
+      verticalVelocity: this.velocity.y,
+      grounded: this.grounded,
+      visible: this.cameraMode === 'third-person',
+      deltaSeconds,
+    })
   }
 }
 

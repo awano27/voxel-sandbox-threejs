@@ -4,6 +4,7 @@ export class InputController {
   private readonly slotQueue: number[] = []
   private primaryActionQueued = false
   private secondaryActionQueued = false
+  private cameraToggleQueued = false
   private readonly touchMode = isTouchUiPreferred()
   private touchMoveAxes = { strafe: 0, forward: 0 }
   private touchLookDelta = { x: 0, y: 0 }
@@ -88,6 +89,12 @@ export class InputController {
     return queued
   }
 
+  consumeCameraToggle(): boolean {
+    const queued = this.cameraToggleQueued
+    this.cameraToggleQueued = false
+    return queued
+  }
+
   setTouchMoveAxes(strafe: number, forward: number): void {
     this.touchMoveAxes.strafe = strafe
     this.touchMoveAxes.forward = forward
@@ -108,6 +115,10 @@ export class InputController {
 
   queueTouchSecondaryAction(): void {
     this.secondaryActionQueued = true
+  }
+
+  queueTouchCameraToggle(): void {
+    this.cameraToggleQueued = true
   }
 
   setTouchSneaking(active: boolean): void {
@@ -136,6 +147,10 @@ export class InputController {
 
     if (digit >= 1 && digit <= 5) {
       this.slotQueue.push(digit - 1)
+    }
+
+    if (event.code === 'KeyV') {
+      this.cameraToggleQueued = true
     }
   }
 

@@ -1,6 +1,6 @@
 # voxel-sandbox-threejs
 
-ブラウザで即遊べる Minecraft 風のボクセルサンドボックスです。Three.js r183、Vite、Pointer Lock、一人称移動、DDA ブロック選択、チャンクメッシュ最適化、AABB 物理に加えて、スマホ用のタッチ操作も実装しています。
+ブラウザで即遊べる Minecraft 風ボクセルサンドボックスです。Three.js r183、Vite、Pointer Lock、一人称移動、DDA ブロック選択、チャンクメッシュ最適化、AABB 物理に加えて、スマホ向けタッチ操作と Roblox 風のブロッキーな三人称アバターを実装しています。
 
 公開 URL: https://awano27.github.io/voxel-sandbox-threejs/
 
@@ -9,10 +9,12 @@
 ## Features
 
 - Three.js + Vite + TypeScript 構成
-- 16 x 16 x 64 チャンクと面カリング済みの merged geometry
+- 16 x 16 x 64 チャンクと面カリング済み merged geometry
 - Simplex Noise ベースの自然地形
-- PointerLockControls での一人称視点
-- スマホ向けの仮想スティック、視点パッド、JUMP / BREAK / PLACE / SNEAK ボタン
+- PointerLockControls による一人称視点
+- Roblox 風のブロッキーなアバターと歩行アニメーション
+- `V` キー / `CAM` ボタンで一人称と三人称を切り替え
+- スマホ向け仮想スティック、LOOK パッド、JUMP / BREAK / PLACE / SNEAK ボタン
 - 重力、ジャンプ、AABB 衝突判定
 - DDA による精密なブロック選択
 - 左クリック破壊、右クリック設置
@@ -23,24 +25,25 @@
 
 PC:
 
-- Click: マウスキャプチャ開始
+- Click: Pointer Lock 開始
 - ESC: Pointer Lock 解除
 - WASD: 移動
 - Shift: スニーク
 - Space: ジャンプ
-- 左クリック: ブロック破壊
-- 右クリック: ブロック設置
-- 1-5: ブロック切り替え
+- 左クリック / 右クリック: 破壊 / 設置
+- 1-5: ブロック切替
+- V: 一人称 / 三人称
 
 Mobile:
 
 - 左スティック: 移動
-- 右側の LOOK パッド: 視点移動
+- 右 LOOK: 視点移動
 - JUMP: ジャンプ
 - BREAK: ブロック破壊
 - PLACE: ブロック設置
 - SNEAK: スニーク
-- ホットバータップ: ブロック切り替え
+- CAM: 一人称 / 三人称
+- ホットバータップ: ブロック切替
 
 ## Local Development
 
@@ -60,12 +63,6 @@ npm run dev
 npm run qa:local
 ```
 
-公開 URL 確認:
-
-```bash
-npm run qa:public
-```
-
 モバイル確認:
 
 ```bash
@@ -73,11 +70,17 @@ npm run dev
 npm run qa:mobile
 ```
 
+公開 URL 確認:
+
+```bash
+npm run qa:public
+```
+
 生成されたスクリーンショットは `docs/` 配下に保存されます。
 
 ## Deployment
 
-`main` ブランチに push すると GitHub Actions が `npm run build` を実行し、その成果物を `gh-pages` ブランチへ自動デプロイします。
+`main` ブランチに push すると GitHub Actions が `npm run build` を実行し、成果物を `gh-pages` ブランチへ自動デプロイします。
 
 ## Project Structure
 
@@ -88,6 +91,7 @@ src/
   player/
     InputController.ts
     Player.ts
+    PlayerAvatar.ts
   world/
     BlockTypes.ts
     Chunk.ts
@@ -99,5 +103,6 @@ src/
     World.ts
 scripts/
   qa-local.mjs
+  qa-mobile.mjs
   qa-public.mjs
 ```
