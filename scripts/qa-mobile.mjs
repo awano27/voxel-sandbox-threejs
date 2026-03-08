@@ -70,6 +70,7 @@ try {
     [targetX, targetY, targetZ],
   )
 
+  await page.locator('#mobile-block-toggle').click()
   await page.locator('#slot-5').click()
   await page.locator('#action-place').click()
   await page.waitForFunction(

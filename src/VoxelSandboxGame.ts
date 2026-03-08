@@ -51,6 +51,8 @@ export class VoxelSandboxGame {
   private readonly questProgressLabel = document.createElement('p')
   private readonly questList = document.createElement('ol')
   private readonly celebrationToast = document.createElement('div')
+  private readonly hotbar = document.createElement('div')
+  private readonly mobileBlockToggle = document.createElement('button')
   private readonly hotbarButtons: HTMLButtonElement[] = []
   private readonly completedMissions = new Set<KidMissionId>()
   private currentTarget: VoxelHit | null = null
@@ -58,6 +60,7 @@ export class VoxelSandboxGame {
   private disposed = false
   private lastFrameTime = performance.now()
   private mobileIntroDismissed = false
+  private mobileHotbarExpanded = false
   private celebrationTimer = 0
 
   constructor(private readonly mountNode: HTMLElement) {
@@ -183,35 +186,46 @@ export class VoxelSandboxGame {
       `
 
     this.startCard.className = 'start-card'
-    this.startCard.innerHTML = `
-      <p class="eyebrow">voxel-sandbox-threejs</p>
-      <h1>${title}</h1>
-      <p>${intro}</p>
-      <div class="howto-grid">
-        <section class="howto-card">
-          <h2>First 30 Seconds</h2>
-          <ol class="howto-steps">
-            <li>${touchMode ? 'Tap START PLAYING, then follow the stars.' : 'Click to lock in, then follow the stars.'}</li>
-            <li>Step on the glowing jump pad for a quick lift.</li>
-            <li>Break one block and place one block to finish the basics.</li>
-          </ol>
-        </section>
-        <section class="howto-card">
-          <h2>What Is New</h2>
-          <ul class="feature-list">
-            <li>Five floating stars are waiting right in front of spawn.</li>
-            <li>The launch pad throws you forward for an instant smile.</li>
-            <li>${touchMode ? 'Use CAM to watch your hero in third person.' : 'Press V to watch your hero in third person.'}</li>
-          </ul>
-        </section>
-      </div>
-      <p class="helper-copy">
-        Tip: the Quest Board always shows one clear thing to try next, so kids do not need to guess what to do.
-      </p>
-      <ul class="controls-list">
-        ${controls}
-      </ul>
-    `
+    this.startCard.innerHTML = touchMode
+      ? `
+        <p class="eyebrow">voxel-sandbox-threejs</p>
+        <h1>${title}</h1>
+        <p>${intro}</p>
+        <ol class="quick-start-list">
+          <li>Follow the stars</li>
+          <li>Jump on the orange pad</li>
+          <li>Use BREAK and PLACE when you feel ready</li>
+        </ol>
+      `
+      : `
+        <p class="eyebrow">voxel-sandbox-threejs</p>
+        <h1>${title}</h1>
+        <p>${intro}</p>
+        <div class="howto-grid">
+          <section class="howto-card">
+            <h2>First 30 Seconds</h2>
+            <ol class="howto-steps">
+              <li>Click to lock in, then follow the stars.</li>
+              <li>Step on the glowing jump pad for a quick lift.</li>
+              <li>Break one block and place one block to finish the basics.</li>
+            </ol>
+          </section>
+          <section class="howto-card">
+            <h2>What Is New</h2>
+            <ul class="feature-list">
+              <li>Five floating stars are waiting right in front of spawn.</li>
+              <li>The launch pad throws you forward for an instant smile.</li>
+              <li>Press V to watch your hero in third person.</li>
+            </ul>
+          </section>
+        </div>
+        <p class="helper-copy">
+          Tip: the Quest Board always shows one clear thing to try next, so kids do not need to guess what to do.
+        </p>
+        <ul class="controls-list">
+          ${controls}
+        </ul>
+      `
     this.startCard.append(this.createStartActions(touchMode))
 
     if (!touchMode) {
@@ -230,13 +244,15 @@ export class VoxelSandboxGame {
     this.lockBadge.textContent = 'PAUSED'
     this.cameraLabel.className = 'camera-chip'
     this.cameraLabel.textContent = 'FIRST PERSON'
+    this.chunkCounter.className = 'status-detail'
     this.chunkCounter.textContent = 'Chunks: 0'
+    this.positionLabel.className = 'status-detail'
     this.positionLabel.textContent = 'Pos: 0, 0, 0'
+    this.targetLabel.className = 'status-detail'
     this.targetLabel.textContent = 'Target: none'
     header.append(this.lockBadge, this.cameraLabel, this.chunkCounter, this.positionLabel, this.targetLabel)
 
-    const hotbar = document.createElement('div')
-    hotbar.className = 'hotbar'
+    this.hotbar.className = 'hotbar'
 
     HOTBAR_BLOCKS.forEach((block, index) => {
       const definition = getBlockDefinition(block)
@@ -246,16 +262,21 @@ export class VoxelSandboxGame {
       button.className = 'slot'
       button.innerHTML = `<span class="slot-key">${index + 1}</span><span class="slot-name">${definition.label}</span>`
       button.style.setProperty('--slot-color', definition.baseColor)
-      button.addEventListener('click', () => this.updateSelectedSlot(index))
+      button.addEventListener('click', () => {
+        this.updateSelectedSlot(index)
+        if (this.input.isTouchMode()) {
+          this.setMobileHotbarExpanded(false)
+        }
+      })
       this.hotbarButtons.push(button)
-      hotbar.append(button)
+      this.hotbar.append(button)
     })
 
     const crosshair = document.createElement('div')
     crosshair.className = 'crosshair'
     crosshair.innerHTML = '<span></span><span></span>'
 
-    hud.append(this.startCard, header, this.createQuestHud(), this.createCelebrationToast(), hotbar, crosshair)
+    hud.append(this.startCard, header, this.createQuestHud(), this.createCelebrationToast(), this.hotbar, crosshair)
 
     if (touchMode) {
       hud.append(this.createMobileControls())
@@ -286,7 +307,7 @@ export class VoxelSandboxGame {
     const note = document.createElement('p')
     note.className = 'start-note'
     note.textContent = touchMode
-      ? 'Tap once to begin. The stars, jump pad, and sky orb are all placed right ahead of spawn.'
+      ? 'Tap once to begin. Move with the left stick, look on the right, and ignore the rest until you want to build.'
       : 'Click once to begin. The stars, jump pad, and sky orb are all placed right ahead of spawn.'
 
     actions.append(button, note)
@@ -387,6 +408,7 @@ export class VoxelSandboxGame {
     this.hotbarButtons.forEach((button, buttonIndex) => {
       button.classList.toggle('active', buttonIndex === index)
     })
+    this.refreshMobileBlockToggle()
   }
 
   private readonly syncLockState = (): void => {
@@ -473,8 +495,12 @@ export class VoxelSandboxGame {
     this.questCard.classList.toggle('compact', compactMode)
     this.questProgressLabel.textContent =
       completeCount === KID_MISSIONS.length
-        ? 'All starter quests cleared. Free build unlocked. Keep collecting stars and building higher.'
-        : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
+        ? compactMode
+          ? 'All clear. Build anything.'
+          : 'All starter quests cleared. Free build unlocked. Keep collecting stars and building higher.'
+        : compactMode
+          ? `Next up | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
+          : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
 
     this.questList.innerHTML = missionsToRender.map((mission) => {
       const done = this.completedMissions.has(mission.id)
@@ -558,13 +584,36 @@ export class VoxelSandboxGame {
       <button id="action-sneak" class="action-btn action-sneak" type="button">SNEAK</button>
       <button id="action-camera" class="action-btn action-camera" type="button">CAM</button>
     `
+    this.mobileBlockToggle.type = 'button'
+    this.mobileBlockToggle.id = 'mobile-block-toggle'
+    this.mobileBlockToggle.className = 'mobile-block-toggle'
+    this.mobileBlockToggle.addEventListener('click', () => {
+      this.setMobileHotbarExpanded(!this.mobileHotbarExpanded)
+    })
+    this.refreshMobileBlockToggle()
 
     this.bindJoystick(joystick, joystickThumb)
     this.bindLookZone(lookZone)
     this.bindTouchActions(actions)
 
-    mobileControls.append(lookZone, joystick, actions)
+    mobileControls.append(lookZone, joystick, this.mobileBlockToggle, actions)
     return mobileControls
+  }
+
+  private setMobileHotbarExpanded(expanded: boolean): void {
+    this.mobileHotbarExpanded = expanded
+    this.hotbar.classList.toggle('expanded', expanded)
+    this.refreshMobileBlockToggle()
+  }
+
+  private refreshMobileBlockToggle(): void {
+    if (!this.input.isTouchMode()) {
+      return
+    }
+
+    const selectedBlock = getBlockDefinition(HOTBAR_BLOCKS[this.selectedSlot]).label
+    this.mobileBlockToggle.textContent = this.mobileHotbarExpanded ? `HIDE BLOCKS` : `BLOCKS: ${selectedBlock}`
+    this.mobileBlockToggle.classList.toggle('active', this.mobileHotbarExpanded)
   }
 
   private bindJoystick(joystick: HTMLDivElement, thumb: HTMLDivElement): void {
