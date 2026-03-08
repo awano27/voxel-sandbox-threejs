@@ -184,6 +184,17 @@ export class VoxelSandboxGame {
         ${controls}
       </ul>
     `
+    this.startCard.append(this.createStartActions(touchMode))
+
+    if (!touchMode) {
+      this.startCard.addEventListener('click', () => {
+        if (this.player.isLocked) {
+          return
+        }
+
+        this.player.controls.lock()
+      })
+    }
 
     const header = document.createElement('div')
     header.className = 'panel top-left'
@@ -223,6 +234,35 @@ export class VoxelSandboxGame {
     }
 
     return hud
+  }
+
+  private createStartActions(touchMode: boolean): HTMLElement {
+    const actions = document.createElement('div')
+    actions.className = 'start-actions'
+
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'start-button'
+    button.textContent = touchMode ? 'START PLAYING' : 'CLICK TO PLAY'
+    button.addEventListener('click', (event) => {
+      event.stopPropagation()
+
+      if (touchMode) {
+        this.dismissMobileIntro()
+        return
+      }
+
+      this.player.controls.lock()
+    })
+
+    const note = document.createElement('p')
+    note.className = 'start-note'
+    note.textContent = touchMode
+      ? 'Tap once to hide this guide and enable the joystick, camera pad, and action buttons.'
+      : 'Mouse look starts after pointer lock. Press ESC any time to pause and reopen this guide.'
+
+    actions.append(button, note)
+    return actions
   }
 
   private updateTarget(): void {

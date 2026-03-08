@@ -15,6 +15,13 @@ try {
     const state = window.__VOXEL_DEBUG__?.getState()
     return Boolean(state && state.touchMode && state.loadedChunks > 0)
   })
+  const startButton = page.locator('.start-button')
+
+  if (await startButton.isVisible()) {
+    await startButton.click()
+    await page.waitForFunction(() => document.querySelector('.start-card')?.classList.contains('hidden') === true)
+  }
+
   await page.locator('#action-camera').click()
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'third-person')
   await page.locator('#action-camera').click()

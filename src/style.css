@@ -111,6 +111,7 @@ button {
     rgb(12 14 17 / 0.78);
   box-shadow: 0 24px 80px rgb(0 0 0 / 0.3);
   backdrop-filter: blur(18px);
+  pointer-events: auto;
   transform: translate(-50%, -50%);
   transition: opacity 180ms ease, transform 180ms ease;
 }
@@ -118,6 +119,7 @@ button {
 .start-card.hidden {
   opacity: 0;
   transform: translate(-50%, -46%);
+  pointer-events: none;
 }
 
 .eyebrow,
@@ -191,6 +193,39 @@ button {
   border-left: 3px solid rgb(255 209 102 / 0.8);
   background: rgb(255 255 255 / 0.04);
   border-radius: 0.65rem;
+}
+
+.start-actions {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.start-button {
+  min-height: 3.3rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid rgb(255 209 102 / 0.72);
+  border-radius: 999px;
+  color: #10161f;
+  font-family: 'Audiowide', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background:
+    linear-gradient(180deg, rgb(255 252 234 / 0.92), rgb(255 209 102 / 0.94)),
+    #ffd166;
+  box-shadow: 0 16px 32px rgb(0 0 0 / 0.22);
+  cursor: pointer;
+}
+
+.start-button:active {
+  transform: translateY(1px);
+}
+
+.start-note {
+  margin: 0;
+  color: rgb(210 227 255 / 0.8);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .hotbar {
