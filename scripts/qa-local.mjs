@@ -27,6 +27,10 @@ try {
     throw new Error('Movement check failed')
   }
 
+  if ((afterMove.playground?.starsCollected ?? 0) < 1) {
+    throw new Error('Star trail check failed')
+  }
+
   const beforeJumpY = afterMove.player.y
   await page.keyboard.press('Space')
   await page.waitForTimeout(500)

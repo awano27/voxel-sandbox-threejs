@@ -1,13 +1,14 @@
 import * as THREE from 'three'
 import Stats from 'stats.js'
 import { MAX_INTERACTION_DISTANCE, PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from './constants'
+import { Playground, type PlaygroundEvent } from './gameplay/Playground'
 import { InputController } from './player/InputController'
 import { Player } from './player/Player'
 import { HOTBAR_BLOCKS, getBlockDefinition, BlockId } from './world/BlockTypes'
 import { traceVoxelRay, type VoxelHit } from './world/DDA'
 import { World } from './world/World'
 
-type KidMissionId = 'walk' | 'jump' | 'break' | 'place'
+type KidMissionId = 'star' | 'pad' | 'break' | 'place' | 'goal'
 
 interface KidMission {
   id: KidMissionId
@@ -16,10 +17,11 @@ interface KidMission {
 }
 
 const KID_MISSIONS: KidMission[] = [
-  { id: 'walk', title: 'Walk a little', hint: 'Push the stick or use WASD to roam.' },
-  { id: 'jump', title: 'Jump once', hint: 'Press JUMP or Space.' },
-  { id: 'break', title: 'Break 1 block', hint: 'Aim at a block and tap BREAK or left click.' },
-  { id: 'place', title: 'Place 1 block', hint: 'Aim at an edge and tap PLACE or right click.' },
+  { id: 'star', title: 'Catch a star', hint: 'Follow the glowing trail in front of spawn.' },
+  { id: 'pad', title: 'Ride the jump pad', hint: 'Step on the orange launch pad and get boosted.' },
+  { id: 'break', title: 'Break 1 block', hint: 'Aim at any block and use BREAK or left click.' },
+  { id: 'place', title: 'Place 1 block', hint: 'Use PLACE or right click to build something small.' },
+  { id: 'goal', title: 'Reach the sky orb', hint: 'Collect all stars, then run to the glowing tower.' },
 ]
 
 export class VoxelSandboxGame {
@@ -32,6 +34,7 @@ export class VoxelSandboxGame {
   private readonly stats = new Stats()
   private readonly world: World
   private readonly player: Player
+  private readonly playground: Playground
   private readonly input: InputController
   private readonly highlight = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxGeometry(1.03, 1.03, 1.03)),
@@ -49,7 +52,6 @@ export class VoxelSandboxGame {
   private readonly questList = document.createElement('ol')
   private readonly celebrationToast = document.createElement('div')
   private readonly hotbarButtons: HTMLButtonElement[] = []
-  private readonly spawnPosition = new THREE.Vector3()
   private readonly completedMissions = new Set<KidMissionId>()
   private currentTarget: VoxelHit | null = null
   private selectedSlot = 0
@@ -74,8 +76,8 @@ export class VoxelSandboxGame {
 
     this.world = new World(this.scene)
     this.player = new Player(this.camera, this.renderer.domElement, this.world.getSpawnPoint())
-    this.spawnPosition.copy(this.player.position)
     this.world.primeAround(this.player.position)
+    this.playground = new Playground(this.scene, this.world, this.player.position)
     this.scene.add(this.player.avatar.root)
 
     this.input = new InputController(() => this.player.controls.lock())
@@ -114,6 +116,7 @@ export class VoxelSandboxGame {
     this.highlight.geometry.dispose()
     ;(this.highlight.material as THREE.Material).dispose()
     this.player.avatar.dispose()
+    this.playground.dispose()
     this.world.dispose()
     this.renderer.dispose()
   }
@@ -137,7 +140,8 @@ export class VoxelSandboxGame {
       this.player.toggleCameraMode()
     }
 
-    this.trackKidProgress(deltaSeconds)
+    this.handlePlaygroundEvents(this.playground.update(deltaSeconds, this.player, now / 1000))
+    this.trackTimers(deltaSeconds)
     this.updateTarget()
     this.applyBlockEditing()
     this.updateHud()
@@ -157,25 +161,25 @@ export class VoxelSandboxGame {
     const hud = document.createElement('div')
     hud.className = 'hud'
     const touchMode = this.input.isTouchMode()
-    const title = touchMode ? 'Touch To Roam' : 'Click To Drop In'
+    const title = touchMode ? 'Treasure Run Starts Here' : 'Click Into Treasure Run'
     const intro = touchMode
-      ? '画面に触れたらすぐ遊べます。左スティックで移動、右LOOKで視点操作、CAMで一人称と三人称を切り替えます。'
-      : 'クリックして視点を固定したらすぐに探索開始です。Vキーで一人称と三人称を切り替えて、ブロッキーなアバターの動きも確認できます。'
+      ? 'Follow the star trail, ride the jump pad, then smash, build, and race to the sky orb.'
+      : 'Start with a quick treasure run: collect stars, hit the jump pad, then build and sprint for the sky orb.'
     const controls = touchMode
       ? `
-        <li>左スティック: 移動</li>
-        <li>右LOOK: 視点移動</li>
-        <li>JUMP: ジャンプ</li>
-        <li>BREAK / PLACE: 破壊 / 設置</li>
-        <li>SNEAK / CAM: スニーク / カメラ切替</li>
+        <li>Left stick: Move</li>
+        <li>LOOK zone: Turn the camera</li>
+        <li>JUMP: Hop or fly from the launch pad</li>
+        <li>BREAK / PLACE: Smash and build</li>
+        <li>SNEAK / CAM: Slow walk / switch camera</li>
       `
       : `
-        <li>WASD: 移動</li>
-        <li>Shift: スニーク</li>
-        <li>Space: ジャンプ</li>
-        <li>左クリック / 右クリック: 破壊 / 設置</li>
-        <li>1-5: ブロック切替</li>
-        <li>V: 一人称 / 三人称</li>
+        <li>WASD: Move</li>
+        <li>Shift: Sneak</li>
+        <li>Space: Jump</li>
+        <li>Left click / Right click: Break / place</li>
+        <li>1-5: Change block</li>
+        <li>V: Switch camera</li>
       `
 
     this.startCard.className = 'start-card'
@@ -185,24 +189,24 @@ export class VoxelSandboxGame {
       <p>${intro}</p>
       <div class="howto-grid">
         <section class="howto-card">
-          <h2>はじめ方</h2>
+          <h2>First 30 Seconds</h2>
           <ol class="howto-steps">
-            <li>${touchMode ? '画面をドラッグして視点を合わせる' : '画面をクリックして Pointer Lock を開始する'}</li>
-            <li>${touchMode ? '左スティックまたは JUMP で地形を歩き回る' : 'WASD と Space で丘や谷を移動する'}</li>
-            <li>${touchMode ? 'BREAK / PLACE で好きな形に地形を編集する' : '左クリック / 右クリックでブロックを削る・置く'}</li>
+            <li>${touchMode ? 'Tap START PLAYING, then follow the stars.' : 'Click to lock in, then follow the stars.'}</li>
+            <li>Step on the glowing jump pad for a quick lift.</li>
+            <li>Break one block and place one block to finish the basics.</li>
           </ol>
         </section>
         <section class="howto-card">
-          <h2>できること</h2>
+          <h2>What Is New</h2>
           <ul class="feature-list">
-            <li>自然地形を探索する</li>
-            <li>5種類のブロックで建築する</li>
-            <li>${touchMode ? 'CAM で視点を切り替えてキャラの動きを見る' : 'V で視点を切り替えてキャラの動きを見る'}</li>
+            <li>Five floating stars are waiting right in front of spawn.</li>
+            <li>The launch pad throws you forward for an instant smile.</li>
+            <li>${touchMode ? 'Use CAM to watch your hero in third person.' : 'Press V to watch your hero in third person.'}</li>
           </ul>
         </section>
       </div>
       <p class="helper-copy">
-        コツ: 画面中央のクロスヘアをブロックに合わせると、狙った場所だけを正確に編集できます。
+        Tip: the Quest Board always shows one clear thing to try next, so kids do not need to guess what to do.
       </p>
       <ul class="controls-list">
         ${controls}
@@ -282,8 +286,8 @@ export class VoxelSandboxGame {
     const note = document.createElement('p')
     note.className = 'start-note'
     note.textContent = touchMode
-      ? 'Tap once to start. The quest board will guide the first 4 things to try.'
-      : 'Click once to start. The quest board will guide the first 4 things to try.'
+      ? 'Tap once to begin. The stars, jump pad, and sky orb are all placed right ahead of spawn.'
+      : 'Click once to begin. The stars, jump pad, and sky orb are all placed right ahead of spawn.'
 
     actions.append(button, note)
     return actions
@@ -367,12 +371,13 @@ export class VoxelSandboxGame {
 
   private updateHud(): void {
     const position = this.player.position
+    const playgroundState = this.playground.getState()
     this.cameraLabel.textContent = this.player.currentCameraMode === 'third-person' ? 'THIRD PERSON' : 'FIRST PERSON'
     this.chunkCounter.textContent = `Chunks: ${this.world.getLoadedChunkCount()}`
     this.positionLabel.textContent = `Pos: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`
     this.targetLabel.textContent = this.currentTarget
-      ? `Target: ${this.currentTarget.block.x}, ${this.currentTarget.block.y}, ${this.currentTarget.block.z}`
-      : 'Target: none'
+      ? `Target: ${this.currentTarget.block.x}, ${this.currentTarget.block.y}, ${this.currentTarget.block.z} | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
+      : `Target: none | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
     this.renderQuestHud()
     this.updateCelebrationToast()
   }
@@ -402,22 +407,34 @@ export class VoxelSandboxGame {
     this.renderer.setSize(window.innerWidth, window.innerHeight)
   }
 
-  private trackKidProgress(deltaSeconds: number): void {
-    const horizontalDistance = Math.hypot(
-      this.player.position.x - this.spawnPosition.x,
-      this.player.position.z - this.spawnPosition.z,
-    )
-
-    if (horizontalDistance >= 3.5) {
-      this.completeMission('walk')
-    }
-
-    if (!this.player.isGrounded && this.player.velocity.y > 1.5) {
-      this.completeMission('jump')
-    }
-
+  private trackTimers(deltaSeconds: number): void {
     if (this.celebrationTimer > 0) {
       this.celebrationTimer = Math.max(0, this.celebrationTimer - deltaSeconds)
+    }
+  }
+
+  private handlePlaygroundEvents(events: PlaygroundEvent[]): void {
+    for (const event of events) {
+      if (event.type === 'star-collected') {
+        const firstStar = !this.completedMissions.has('star')
+        this.completeMission('star')
+
+        if (!firstStar) {
+          this.showCelebration(`Stars ${event.collected}/${event.total}`)
+        }
+      }
+
+      if (event.type === 'all-stars-collected') {
+        this.showCelebration('All stars collected. Run to the sky orb!')
+      }
+
+      if (event.type === 'pad-used') {
+        this.completeMission('pad')
+      }
+
+      if (event.type === 'goal-reached') {
+        this.completeMission('goal')
+      }
     }
   }
 
@@ -443,12 +460,23 @@ export class VoxelSandboxGame {
 
   private renderQuestHud(): void {
     const completeCount = this.completedMissions.size
+    const playgroundState = this.playground.getState()
+    const compactMode = this.input.isTouchMode()
+    const nextMission = KID_MISSIONS.find((mission) => !this.completedMissions.has(mission.id))
+    const missionsToRender = compactMode
+      ? nextMission
+        ? [nextMission]
+        : [KID_MISSIONS[KID_MISSIONS.length - 1]]
+      : KID_MISSIONS
+
+    this.questCard.classList.toggle('all-clear', completeCount === KID_MISSIONS.length)
+    this.questCard.classList.toggle('compact', compactMode)
     this.questProgressLabel.textContent =
       completeCount === KID_MISSIONS.length
-        ? 'All starter quests cleared. Build anything you want.'
-        : `${completeCount}/${KID_MISSIONS.length} starter quests cleared`
+        ? 'All starter quests cleared. Free build unlocked. Keep collecting stars and building higher.'
+        : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
 
-    this.questList.innerHTML = KID_MISSIONS.map((mission) => {
+    this.questList.innerHTML = missionsToRender.map((mission) => {
       const done = this.completedMissions.has(mission.id)
       return `
         <li class="${done ? 'done' : ''}">
@@ -484,6 +512,7 @@ export class VoxelSandboxGame {
         loadedChunks: this.world.getLoadedChunkCount(),
         missionsComplete: this.completedMissions.size,
         missionsTotal: KID_MISSIONS.length,
+        playground: this.playground.getState(),
         player: {
           x: Number(this.player.position.x.toFixed(3)),
           y: Number(this.player.position.y.toFixed(3)),

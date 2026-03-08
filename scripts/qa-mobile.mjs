@@ -43,6 +43,10 @@ try {
     throw new Error('Mobile movement check failed')
   }
 
+  if ((afterMove.playground?.starsCollected ?? 0) < 1) {
+    throw new Error('Mobile star trail check failed')
+  }
+
   const beforeJumpY = afterMove.player.y
   await page.locator('#action-jump').click()
   await page.waitForTimeout(500)

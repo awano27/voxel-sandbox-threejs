@@ -160,6 +160,14 @@ button {
   box-shadow: 0 20px 60px rgb(66 148 88 / 0.18);
 }
 
+.quest-card.compact .quest-list li {
+  padding: 0.72rem 0.78rem;
+}
+
+.quest-card.compact .quest-list p {
+  font-size: 0.78rem;
+}
+
 .celebration-toast {
   position: absolute;
   z-index: 9;
@@ -457,7 +465,7 @@ button {
 .touch-mode .quest-card {
   top: calc(env(safe-area-inset-top, 0px) + 5.05rem);
   right: 0.75rem;
-  width: min(18rem, calc(100vw - 1.5rem));
+  width: min(16rem, calc(100vw - 1.5rem));
 }
 
 .touch-mode .celebration-toast {
@@ -659,8 +667,10 @@ button {
   .touch-mode .quest-card {
     right: 0.75rem;
     left: 0.75rem;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 13rem);
-    width: auto;
+    top: calc(env(safe-area-inset-top, 0px) + 4.8rem);
+    bottom: auto;
+    width: min(15.5rem, calc(100vw - 1.5rem));
+    left: auto;
   }
 
   .howto-grid {
