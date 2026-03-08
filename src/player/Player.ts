@@ -19,6 +19,7 @@ export class Player {
   readonly velocity = new THREE.Vector3()
   readonly cameraDirection = new THREE.Vector3()
   private grounded = false
+  private readonly lookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
@@ -40,19 +41,25 @@ export class Player {
 
   update(deltaSeconds: number, input: InputController, world: World): void {
     const moveDirection = new THREE.Vector3()
+    const lookDelta = input.consumeLookDelta()
     const forward = this.getForwardVector()
     const right = new THREE.Vector3(-forward.z, 0, forward.x)
+    const moveAxes = input.getMoveAxes()
 
-    if (input.isPressed('KeyW')) moveDirection.add(forward)
-    if (input.isPressed('KeyS')) moveDirection.sub(forward)
-    if (input.isPressed('KeyD')) moveDirection.add(right)
-    if (input.isPressed('KeyA')) moveDirection.sub(right)
+    if (lookDelta.x !== 0 || lookDelta.y !== 0) {
+      this.applyLookDelta(lookDelta.x, lookDelta.y)
+      forward.copy(this.getForwardVector())
+      right.set(-forward.z, 0, forward.x)
+    }
+
+    if (moveAxes.forward !== 0) moveDirection.addScaledVector(forward, moveAxes.forward)
+    if (moveAxes.strafe !== 0) moveDirection.addScaledVector(right, moveAxes.strafe)
 
     if (moveDirection.lengthSq() > 0) {
       moveDirection.normalize()
     }
 
-    const speed = input.isPressed('ShiftLeft') ? PLAYER_SNEAK_SPEED : PLAYER_SPEED
+    const speed = input.isSneaking() ? PLAYER_SNEAK_SPEED : PLAYER_SPEED
     const control = this.grounded ? 1 : PLAYER_AIR_CONTROL
     const acceleration = PLAYER_GROUND_ACCELERATION * control
 
@@ -72,6 +79,14 @@ export class Player {
 
   getLookDirection(): THREE.Vector3 {
     return this.camera.getWorldDirection(this.cameraDirection).normalize()
+  }
+
+  private applyLookDelta(deltaX: number, deltaY: number): void {
+    this.lookEuler.setFromQuaternion(this.camera.quaternion)
+    this.lookEuler.y -= deltaX * 0.0034
+    this.lookEuler.x -= deltaY * 0.0034
+    this.lookEuler.x = THREE.MathUtils.clamp(this.lookEuler.x, -Math.PI / 2 + 0.08, Math.PI / 2 - 0.08)
+    this.camera.quaternion.setFromEuler(this.lookEuler)
   }
 
   private getForwardVector(): THREE.Vector3 {

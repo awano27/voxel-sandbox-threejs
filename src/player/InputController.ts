@@ -4,6 +4,10 @@ export class InputController {
   private readonly slotQueue: number[] = []
   private primaryActionQueued = false
   private secondaryActionQueued = false
+  private readonly touchMode = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+  private touchMoveAxes = { strafe: 0, forward: 0 }
+  private touchLookDelta = { x: 0, y: 0 }
+  private touchSneaking = false
 
   constructor(private readonly lockPointer: () => void) {
     window.addEventListener('keydown', this.handleKeyDown)
@@ -21,6 +25,47 @@ export class InputController {
 
   isPressed(code: string): boolean {
     return this.pressed.has(code)
+  }
+
+  isTouchMode(): boolean {
+    return this.touchMode
+  }
+
+  isInteractionEnabled(pointerLocked: boolean): boolean {
+    return pointerLocked || this.touchMode
+  }
+
+  isSneaking(): boolean {
+    return this.pressed.has('ShiftLeft') || this.touchSneaking
+  }
+
+  getMoveAxes(): { strafe: number; forward: number } {
+    let strafe = 0
+    let forward = 0
+
+    if (this.pressed.has('KeyD')) strafe += 1
+    if (this.pressed.has('KeyA')) strafe -= 1
+    if (this.pressed.has('KeyW')) forward += 1
+    if (this.pressed.has('KeyS')) forward -= 1
+
+    strafe += this.touchMoveAxes.strafe
+    forward += this.touchMoveAxes.forward
+
+    const length = Math.hypot(strafe, forward)
+
+    if (length > 1) {
+      strafe /= length
+      forward /= length
+    }
+
+    return { strafe, forward }
+  }
+
+  consumeLookDelta(): { x: number; y: number } {
+    const delta = { ...this.touchLookDelta }
+    this.touchLookDelta.x = 0
+    this.touchLookDelta.y = 0
+    return delta
   }
 
   consumeJump(): boolean {
@@ -41,6 +86,32 @@ export class InputController {
     const queued = this.secondaryActionQueued
     this.secondaryActionQueued = false
     return queued
+  }
+
+  setTouchMoveAxes(strafe: number, forward: number): void {
+    this.touchMoveAxes.strafe = strafe
+    this.touchMoveAxes.forward = forward
+  }
+
+  queueTouchLook(deltaX: number, deltaY: number): void {
+    this.touchLookDelta.x += deltaX
+    this.touchLookDelta.y += deltaY
+  }
+
+  queueTouchJump(): void {
+    this.justPressed.add('Space')
+  }
+
+  queueTouchPrimaryAction(): void {
+    this.primaryActionQueued = true
+  }
+
+  queueTouchSecondaryAction(): void {
+    this.secondaryActionQueued = true
+  }
+
+  setTouchSneaking(active: boolean): void {
+    this.touchSneaking = active
   }
 
   endFrame(): void {
@@ -73,6 +144,10 @@ export class InputController {
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
+    if (this.touchMode) {
+      return
+    }
+
     if (document.pointerLockElement === null) {
       this.lockPointer()
       return

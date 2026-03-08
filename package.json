@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "qa:local": "node scripts/qa-local.mjs",
-    "qa:public": "node scripts/qa-public.mjs"
+    "qa:public": "node scripts/qa-public.mjs",
+    "qa:mobile": "node scripts/qa-mobile.mjs"
   },
   "devDependencies": {
     "@types/three": "^0.183.0",

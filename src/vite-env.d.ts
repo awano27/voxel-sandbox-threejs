@@ -2,6 +2,7 @@ interface VoxelDebugApi {
   getState: () => {
     ready: boolean
     locked: boolean
+    touchMode: boolean
     selectedSlot: number
     selectedBlock: string
     loadedChunks: number

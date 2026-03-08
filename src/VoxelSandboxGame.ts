@@ -33,6 +33,7 @@ export class VoxelSandboxGame {
   private selectedSlot = 0
   private disposed = false
   private lastFrameTime = performance.now()
+  private mobileIntroDismissed = false
 
   constructor(private readonly mountNode: HTMLElement) {
     this.mountNode.innerHTML = ''
@@ -53,6 +54,7 @@ export class VoxelSandboxGame {
     this.world.primeAround(this.player.position)
 
     this.input = new InputController(() => this.player.controls.lock())
+    this.mountNode.classList.toggle('touch-mode', this.input.isTouchMode())
 
     this.highlight.visible = false
     this.scene.add(this.highlight)
@@ -123,19 +125,35 @@ export class VoxelSandboxGame {
   private createHud(): HTMLElement {
     const hud = document.createElement('div')
     hud.className = 'hud'
-
-    this.startCard.className = 'start-card'
-    this.startCard.innerHTML = `
-      <p class="eyebrow">voxel-sandbox-threejs</p>
-      <h1>Click To Drop In</h1>
-      <p>Pointer Lockで視点を固定。ESCで解除。地形は毎回同じシードで即ロードされます。</p>
-      <ul class="controls-list">
+    const touchMode = this.input.isTouchMode()
+    const title = touchMode ? 'Touch To Roam' : 'Click To Drop In'
+    const intro = touchMode
+      ? '左親指で移動、右親指で視点。JUMP / BREAK / PLACE / SNEAK ボタンでスマホからそのまま遊べます。'
+      : 'Pointer Lockで視点を固定。ESCで解除。地形は毎回同じシードで即ロードされます。'
+    const controls = touchMode
+      ? `
+        <li>左スティック: 移動</li>
+        <li>右パッド: 視点移動</li>
+        <li>JUMP: ジャンプ</li>
+        <li>BREAK / PLACE: 破壊 / 設置</li>
+        <li>SNEAK: スニーク</li>
+      `
+      : `
         <li>WASD: 移動</li>
         <li>Shift: スニーク</li>
         <li>Space: ジャンプ</li>
         <li>左クリック: 破壊</li>
         <li>右クリック: 設置</li>
         <li>1-5: ブロック切替</li>
+      `
+
+    this.startCard.className = 'start-card'
+    this.startCard.innerHTML = `
+      <p class="eyebrow">voxel-sandbox-threejs</p>
+      <h1>${title}</h1>
+      <p>${intro}</p>
+      <ul class="controls-list">
+        ${controls}
       </ul>
     `
 
@@ -155,6 +173,7 @@ export class VoxelSandboxGame {
       const definition = getBlockDefinition(block)
       const button = document.createElement('button')
       button.type = 'button'
+      button.id = `slot-${index + 1}`
       button.className = 'slot'
       button.innerHTML = `<span class="slot-key">${index + 1}</span><span class="slot-name">${definition.label}</span>`
       button.style.setProperty('--slot-color', definition.baseColor)
@@ -168,6 +187,11 @@ export class VoxelSandboxGame {
     crosshair.innerHTML = '<span></span><span></span>'
 
     hud.append(this.startCard, header, hotbar, crosshair)
+
+    if (touchMode) {
+      hud.append(this.createMobileControls())
+    }
+
     return hud
   }
 
@@ -193,7 +217,7 @@ export class VoxelSandboxGame {
   }
 
   private applyBlockEditing(): void {
-    if (!this.player.isLocked || !this.currentTarget) {
+    if (!this.input.isInteractionEnabled(this.player.isLocked) || !this.currentTarget) {
       this.input.consumePrimaryAction()
       this.input.consumeSecondaryAction()
       return
@@ -246,6 +270,12 @@ export class VoxelSandboxGame {
   }
 
   private readonly syncLockState = (): void => {
+    if (this.input.isTouchMode()) {
+      this.lockBadge.textContent = 'TOUCH'
+      this.startCard.classList.toggle('hidden', this.mobileIntroDismissed)
+      return
+    }
+
     const locked = this.player.isLocked
     this.lockBadge.textContent = locked ? 'LOCKED' : 'PAUSED'
     this.startCard.classList.toggle('hidden', locked)
@@ -262,6 +292,7 @@ export class VoxelSandboxGame {
       getState: () => ({
         ready: true,
         locked: this.player.isLocked,
+        touchMode: this.input.isTouchMode(),
         selectedSlot: this.selectedSlot,
         selectedBlock: getBlockDefinition(HOTBAR_BLOCKS[this.selectedSlot]).label,
         loadedChunks: this.world.getLoadedChunkCount(),
@@ -280,6 +311,217 @@ export class VoxelSandboxGame {
       }),
       peekBlock: (x: number, y: number, z: number) => this.world.getBlock(x, y, z),
     }
+  }
+
+  private createMobileControls(): HTMLElement {
+    const mobileControls = document.createElement('div')
+    mobileControls.className = 'mobile-controls'
+
+    const lookZone = document.createElement('div')
+    lookZone.id = 'look-zone'
+    lookZone.className = 'look-zone'
+    lookZone.innerHTML = '<span>LOOK</span>'
+
+    const joystick = document.createElement('div')
+    joystick.id = 'move-joystick'
+    joystick.className = 'joystick'
+    joystick.innerHTML = '<div class="joystick-ring"></div><div class="joystick-thumb"></div>'
+    const joystickThumb = joystick.querySelector<HTMLDivElement>('.joystick-thumb')
+
+    if (!joystickThumb) {
+      throw new Error('Missing joystick thumb')
+    }
+
+    const actions = document.createElement('div')
+    actions.className = 'mobile-actions'
+    actions.innerHTML = `
+      <button id="action-break" class="action-btn action-break" type="button">BREAK</button>
+      <button id="action-place" class="action-btn action-place" type="button">PLACE</button>
+      <button id="action-jump" class="action-btn action-jump" type="button">JUMP</button>
+      <button id="action-sneak" class="action-btn action-sneak" type="button">SNEAK</button>
+    `
+
+    this.bindJoystick(joystick, joystickThumb)
+    this.bindLookZone(lookZone)
+    this.bindTouchActions(actions)
+
+    mobileControls.append(lookZone, joystick, actions)
+    return mobileControls
+  }
+
+  private bindJoystick(joystick: HTMLDivElement, thumb: HTMLDivElement): void {
+    let pointerId: number | null = null
+
+    const resetJoystick = (): void => {
+      this.input.setTouchMoveAxes(0, 0)
+      thumb.style.transform = 'translate(-50%, -50%)'
+      joystick.classList.remove('active')
+    }
+
+    const updateStick = (clientX: number, clientY: number): void => {
+      const rect = joystick.getBoundingClientRect()
+      const radius = rect.width * 0.33
+      const centerX = rect.left + rect.width / 2
+      const centerY = rect.top + rect.height / 2
+      const dx = clientX - centerX
+      const dy = clientY - centerY
+      const distance = Math.hypot(dx, dy)
+      const scale = distance > radius ? radius / distance : 1
+      const clampedX = dx * scale
+      const clampedY = dy * scale
+
+      thumb.style.transform = `translate(calc(-50% + ${clampedX}px), calc(-50% + ${clampedY}px))`
+      this.input.setTouchMoveAxes(clampedX / radius, -clampedY / radius)
+    }
+
+    joystick.addEventListener('pointerdown', (event) => {
+      this.dismissMobileIntro()
+      pointerId = event.pointerId
+      joystick.classList.add('active')
+      try {
+        joystick.setPointerCapture(event.pointerId)
+      } catch {}
+      updateStick(event.clientX, event.clientY)
+    })
+
+    joystick.addEventListener('pointermove', (event) => {
+      if (pointerId !== event.pointerId) {
+        return
+      }
+
+      updateStick(event.clientX, event.clientY)
+    })
+
+    const releaseStick = (event: PointerEvent): void => {
+      if (pointerId !== event.pointerId) {
+        return
+      }
+
+      try {
+        joystick.releasePointerCapture(event.pointerId)
+      } catch {}
+      pointerId = null
+      resetJoystick()
+    }
+
+    joystick.addEventListener('pointerup', releaseStick)
+    joystick.addEventListener('pointercancel', releaseStick)
+    joystick.addEventListener('lostpointercapture', () => {
+      pointerId = null
+      resetJoystick()
+    })
+  }
+
+  private bindLookZone(lookZone: HTMLDivElement): void {
+    let pointerId: number | null = null
+    let lastX = 0
+    let lastY = 0
+
+    lookZone.addEventListener('pointerdown', (event) => {
+      this.dismissMobileIntro()
+      pointerId = event.pointerId
+      lastX = event.clientX
+      lastY = event.clientY
+      lookZone.classList.add('active')
+      try {
+        lookZone.setPointerCapture(event.pointerId)
+      } catch {}
+    })
+
+    lookZone.addEventListener('pointermove', (event) => {
+      if (pointerId !== event.pointerId) {
+        return
+      }
+
+      this.input.queueTouchLook(event.clientX - lastX, event.clientY - lastY)
+      lastX = event.clientX
+      lastY = event.clientY
+    })
+
+    const releaseLook = (event: PointerEvent): void => {
+      if (pointerId !== event.pointerId) {
+        return
+      }
+
+      try {
+        lookZone.releasePointerCapture(event.pointerId)
+      } catch {}
+      pointerId = null
+      lookZone.classList.remove('active')
+    }
+
+    lookZone.addEventListener('pointerup', releaseLook)
+    lookZone.addEventListener('pointercancel', releaseLook)
+    lookZone.addEventListener('lostpointercapture', () => {
+      pointerId = null
+      lookZone.classList.remove('active')
+    })
+  }
+
+  private bindTouchActions(actions: HTMLDivElement): void {
+    const breakButton = actions.querySelector<HTMLButtonElement>('#action-break')
+    const placeButton = actions.querySelector<HTMLButtonElement>('#action-place')
+    const jumpButton = actions.querySelector<HTMLButtonElement>('#action-jump')
+    const sneakButton = actions.querySelector<HTMLButtonElement>('#action-sneak')
+
+    if (!breakButton || !placeButton || !jumpButton || !sneakButton) {
+      throw new Error('Missing touch action buttons')
+    }
+
+    const tapAction = (button: HTMLButtonElement, handler: () => void): void => {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        this.dismissMobileIntro()
+        handler()
+      })
+    }
+
+    tapAction(breakButton, () => this.input.queueTouchPrimaryAction())
+    tapAction(placeButton, () => this.input.queueTouchSecondaryAction())
+    tapAction(jumpButton, () => this.input.queueTouchJump())
+
+    let sneakPointerId: number | null = null
+
+    sneakButton.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      this.dismissMobileIntro()
+      sneakPointerId = event.pointerId
+      sneakButton.classList.add('active')
+      this.input.setTouchSneaking(true)
+      try {
+        sneakButton.setPointerCapture(event.pointerId)
+      } catch {}
+    })
+
+    const releaseSneak = (event: PointerEvent): void => {
+      if (sneakPointerId !== event.pointerId) {
+        return
+      }
+
+      sneakPointerId = null
+      sneakButton.classList.remove('active')
+      this.input.setTouchSneaking(false)
+      try {
+        sneakButton.releasePointerCapture(event.pointerId)
+      } catch {}
+    }
+
+    sneakButton.addEventListener('pointerup', releaseSneak)
+    sneakButton.addEventListener('pointercancel', releaseSneak)
+    sneakButton.addEventListener('lostpointercapture', () => {
+      sneakPointerId = null
+      sneakButton.classList.remove('active')
+      this.input.setTouchSneaking(false)
+    })
+  }
+
+  private dismissMobileIntro(): void {
+    if (!this.input.isTouchMode() || this.mobileIntroDismissed) {
+      return
+    }
+
+    this.mobileIntroDismissed = true
+    this.syncLockState()
   }
 
   private blockWouldOverlapPlayer(blockPosition: THREE.Vector3): boolean {
