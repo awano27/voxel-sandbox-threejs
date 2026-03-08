@@ -53,6 +53,10 @@ export class Player {
     return this.cameraMode
   }
 
+  get isGrounded(): boolean {
+    return this.grounded
+  }
+
   update(deltaSeconds: number, input: InputController, world: World): void {
     const moveDirection = new THREE.Vector3()
     const lookDelta = input.consumeLookDelta()

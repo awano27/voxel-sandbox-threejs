@@ -7,6 +7,21 @@ import { HOTBAR_BLOCKS, getBlockDefinition, BlockId } from './world/BlockTypes'
 import { traceVoxelRay, type VoxelHit } from './world/DDA'
 import { World } from './world/World'
 
+type KidMissionId = 'walk' | 'jump' | 'break' | 'place'
+
+interface KidMission {
+  id: KidMissionId
+  title: string
+  hint: string
+}
+
+const KID_MISSIONS: KidMission[] = [
+  { id: 'walk', title: 'Walk a little', hint: 'Push the stick or use WASD to roam.' },
+  { id: 'jump', title: 'Jump once', hint: 'Press JUMP or Space.' },
+  { id: 'break', title: 'Break 1 block', hint: 'Aim at a block and tap BREAK or left click.' },
+  { id: 'place', title: 'Place 1 block', hint: 'Aim at an edge and tap PLACE or right click.' },
+]
+
 export class VoxelSandboxGame {
   private readonly scene = new THREE.Scene()
   private readonly camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 250)
@@ -29,12 +44,19 @@ export class VoxelSandboxGame {
   private readonly targetLabel = document.createElement('span')
   private readonly lockBadge = document.createElement('span')
   private readonly cameraLabel = document.createElement('span')
+  private readonly questCard = document.createElement('section')
+  private readonly questProgressLabel = document.createElement('p')
+  private readonly questList = document.createElement('ol')
+  private readonly celebrationToast = document.createElement('div')
   private readonly hotbarButtons: HTMLButtonElement[] = []
+  private readonly spawnPosition = new THREE.Vector3()
+  private readonly completedMissions = new Set<KidMissionId>()
   private currentTarget: VoxelHit | null = null
   private selectedSlot = 0
   private disposed = false
   private lastFrameTime = performance.now()
   private mobileIntroDismissed = false
+  private celebrationTimer = 0
 
   constructor(private readonly mountNode: HTMLElement) {
     this.mountNode.innerHTML = ''
@@ -52,6 +74,7 @@ export class VoxelSandboxGame {
 
     this.world = new World(this.scene)
     this.player = new Player(this.camera, this.renderer.domElement, this.world.getSpawnPoint())
+    this.spawnPosition.copy(this.player.position)
     this.world.primeAround(this.player.position)
     this.scene.add(this.player.avatar.root)
 
@@ -114,6 +137,7 @@ export class VoxelSandboxGame {
       this.player.toggleCameraMode()
     }
 
+    this.trackKidProgress(deltaSeconds)
     this.updateTarget()
     this.applyBlockEditing()
     this.updateHud()
@@ -227,7 +251,7 @@ export class VoxelSandboxGame {
     crosshair.className = 'crosshair'
     crosshair.innerHTML = '<span></span><span></span>'
 
-    hud.append(this.startCard, header, hotbar, crosshair)
+    hud.append(this.startCard, header, this.createQuestHud(), this.createCelebrationToast(), hotbar, crosshair)
 
     if (touchMode) {
       hud.append(this.createMobileControls())
@@ -258,11 +282,27 @@ export class VoxelSandboxGame {
     const note = document.createElement('p')
     note.className = 'start-note'
     note.textContent = touchMode
-      ? 'Tap once to hide this guide and enable the joystick, camera pad, and action buttons.'
-      : 'Mouse look starts after pointer lock. Press ESC any time to pause and reopen this guide.'
+      ? 'Tap once to start. The quest board will guide the first 4 things to try.'
+      : 'Click once to start. The quest board will guide the first 4 things to try.'
 
     actions.append(button, note)
     return actions
+  }
+
+  private createQuestHud(): HTMLElement {
+    this.questCard.className = 'panel quest-card'
+    this.questCard.innerHTML = '<p class="quest-eyebrow">KIDS MODE</p><h2>Quest Board</h2>'
+    this.questProgressLabel.className = 'quest-progress'
+    this.questList.className = 'quest-list'
+    this.questCard.append(this.questProgressLabel, this.questList)
+    this.renderQuestHud()
+    return this.questCard
+  }
+
+  private createCelebrationToast(): HTMLElement {
+    this.celebrationToast.className = 'celebration-toast'
+    this.celebrationToast.setAttribute('aria-live', 'polite')
+    return this.celebrationToast
   }
 
   private updateTarget(): void {
@@ -300,6 +340,7 @@ export class VoxelSandboxGame {
         this.currentTarget.block.z,
         BlockId.Air,
       )
+      this.completeMission('break')
     }
 
     if (this.input.consumeSecondaryAction()) {
@@ -320,6 +361,7 @@ export class VoxelSandboxGame {
       }
 
       this.world.setBlock(placePosition.x, placePosition.y, placePosition.z, nextBlock)
+      this.completeMission('place')
     }
   }
 
@@ -331,6 +373,8 @@ export class VoxelSandboxGame {
     this.targetLabel.textContent = this.currentTarget
       ? `Target: ${this.currentTarget.block.x}, ${this.currentTarget.block.y}, ${this.currentTarget.block.z}`
       : 'Target: none'
+    this.renderQuestHud()
+    this.updateCelebrationToast()
   }
 
   private updateSelectedSlot(index: number): void {
@@ -358,6 +402,76 @@ export class VoxelSandboxGame {
     this.renderer.setSize(window.innerWidth, window.innerHeight)
   }
 
+  private trackKidProgress(deltaSeconds: number): void {
+    const horizontalDistance = Math.hypot(
+      this.player.position.x - this.spawnPosition.x,
+      this.player.position.z - this.spawnPosition.z,
+    )
+
+    if (horizontalDistance >= 3.5) {
+      this.completeMission('walk')
+    }
+
+    if (!this.player.isGrounded && this.player.velocity.y > 1.5) {
+      this.completeMission('jump')
+    }
+
+    if (this.celebrationTimer > 0) {
+      this.celebrationTimer = Math.max(0, this.celebrationTimer - deltaSeconds)
+    }
+  }
+
+  private completeMission(id: KidMissionId): void {
+    if (this.completedMissions.has(id)) {
+      return
+    }
+
+    this.completedMissions.add(id)
+    const mission = KID_MISSIONS.find((entry) => entry.id === id)
+
+    if (mission) {
+      this.showCelebration(`Quest clear: ${mission.title}`)
+    }
+
+    if (this.completedMissions.size === KID_MISSIONS.length) {
+      this.showCelebration('Sandbox Star unlocked')
+      this.questCard.classList.add('all-clear')
+    }
+
+    this.renderQuestHud()
+  }
+
+  private renderQuestHud(): void {
+    const completeCount = this.completedMissions.size
+    this.questProgressLabel.textContent =
+      completeCount === KID_MISSIONS.length
+        ? 'All starter quests cleared. Build anything you want.'
+        : `${completeCount}/${KID_MISSIONS.length} starter quests cleared`
+
+    this.questList.innerHTML = KID_MISSIONS.map((mission) => {
+      const done = this.completedMissions.has(mission.id)
+      return `
+        <li class="${done ? 'done' : ''}">
+          <span class="quest-mark">${done ? 'DONE' : 'NEXT'}</span>
+          <div>
+            <strong>${mission.title}</strong>
+            <p>${mission.hint}</p>
+          </div>
+        </li>
+      `
+    }).join('')
+  }
+
+  private showCelebration(message: string): void {
+    this.celebrationToast.textContent = message
+    this.celebrationToast.classList.add('visible')
+    this.celebrationTimer = 2.4
+  }
+
+  private updateCelebrationToast(): void {
+    this.celebrationToast.classList.toggle('visible', this.celebrationTimer > 0)
+  }
+
   private registerDebugHooks(): void {
     window.__VOXEL_DEBUG__ = {
       getState: () => ({
@@ -368,6 +482,8 @@ export class VoxelSandboxGame {
         selectedSlot: this.selectedSlot,
         selectedBlock: getBlockDefinition(HOTBAR_BLOCKS[this.selectedSlot]).label,
         loadedChunks: this.world.getLoadedChunkCount(),
+        missionsComplete: this.completedMissions.size,
+        missionsTotal: KID_MISSIONS.length,
         player: {
           x: Number(this.player.position.x.toFixed(3)),
           y: Number(this.player.position.y.toFixed(3)),
