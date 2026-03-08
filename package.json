@@ -1,0 +1,23 @@
+{
+  "name": "voxel-sandbox-threejs",
+  "private": false,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "qa:local": "node scripts/qa-local.mjs",
+    "qa:public": "node scripts/qa-public.mjs"
+  },
+  "devDependencies": {
+    "@types/three": "^0.183.0",
+    "playwright": "^1.58.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "stats.js": "^0.17.0",
+    "three": "^0.183.2"
+  }
+}
