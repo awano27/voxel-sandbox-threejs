@@ -135,8 +135,8 @@ export class VoxelSandboxGame {
     const touchMode = this.input.isTouchMode()
     const title = touchMode ? 'Touch To Roam' : 'Click To Drop In'
     const intro = touchMode
-      ? '左スティックで移動、右LOOKで視点操作。CAMで一人称と三人称を切り替えられます。'
-      : 'Pointer Lockで視点を固定。Vキーで一人称と三人称を切り替えて、ブロッキーなアバターの動きを確認できます。'
+      ? '画面に触れたらすぐ遊べます。左スティックで移動、右LOOKで視点操作、CAMで一人称と三人称を切り替えます。'
+      : 'クリックして視点を固定したらすぐに探索開始です。Vキーで一人称と三人称を切り替えて、ブロッキーなアバターの動きも確認できます。'
     const controls = touchMode
       ? `
         <li>左スティック: 移動</li>
@@ -159,6 +159,27 @@ export class VoxelSandboxGame {
       <p class="eyebrow">voxel-sandbox-threejs</p>
       <h1>${title}</h1>
       <p>${intro}</p>
+      <div class="howto-grid">
+        <section class="howto-card">
+          <h2>はじめ方</h2>
+          <ol class="howto-steps">
+            <li>${touchMode ? '画面をドラッグして視点を合わせる' : '画面をクリックして Pointer Lock を開始する'}</li>
+            <li>${touchMode ? '左スティックまたは JUMP で地形を歩き回る' : 'WASD と Space で丘や谷を移動する'}</li>
+            <li>${touchMode ? 'BREAK / PLACE で好きな形に地形を編集する' : '左クリック / 右クリックでブロックを削る・置く'}</li>
+          </ol>
+        </section>
+        <section class="howto-card">
+          <h2>できること</h2>
+          <ul class="feature-list">
+            <li>自然地形を探索する</li>
+            <li>5種類のブロックで建築する</li>
+            <li>${touchMode ? 'CAM で視点を切り替えてキャラの動きを見る' : 'V で視点を切り替えてキャラの動きを見る'}</li>
+          </ul>
+        </section>
+      </div>
+      <p class="helper-copy">
+        コツ: 画面中央のクロスヘアをブロックに合わせると、狙った場所だけを正確に編集できます。
+      </p>
       <ul class="controls-list">
         ${controls}
       </ul>

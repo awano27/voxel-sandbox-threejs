@@ -153,6 +153,46 @@ button {
   color: #bfe7ff;
 }
 
+.howto-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.howto-card {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 0.04);
+}
+
+.howto-card h2 {
+  margin: 0 0 0.55rem;
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd166;
+}
+
+.howto-steps,
+.feature-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.15rem;
+  color: rgb(242 247 255 / 0.88);
+  line-height: 1.55;
+}
+
+.helper-copy {
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border-left: 3px solid rgb(255 209 102 / 0.8);
+  background: rgb(255 255 255 / 0.04);
+  border-radius: 0.65rem;
+}
+
 .hotbar {
   position: absolute;
   z-index: 7;
@@ -447,6 +487,10 @@ button {
 
   .touch-mode .panel {
     padding: 0.75rem 0.9rem;
+  }
+
+  .howto-grid {
+    grid-template-columns: 1fr;
   }
 
   .touch-mode .hotbar {
