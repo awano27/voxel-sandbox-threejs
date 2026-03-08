@@ -15,7 +15,7 @@ try {
     const state = window.__VOXEL_DEBUG__?.getState()
     return Boolean(state && state.touchMode && state.loadedChunks > 0)
   })
-  const startButton = page.locator('.start-button')
+  const startButton = page.getByRole('button', { name: 'START PLAYING' })
 
   if (await startButton.isVisible()) {
     await startButton.click()

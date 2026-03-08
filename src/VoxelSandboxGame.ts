@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import Stats from 'stats.js'
 import { MAX_INTERACTION_DISTANCE, PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from './constants'
+import { GameAudio } from './gameplay/GameAudio'
 import { Playground, type PlaygroundEvent } from './gameplay/Playground'
 import { InputController } from './player/InputController'
 import { Player } from './player/Player'
@@ -26,6 +27,7 @@ const KID_MISSIONS: KidMission[] = [
 ]
 
 export class VoxelSandboxGame {
+  private static readonly BEST_RUN_STORAGE_KEY = 'voxel-sandbox-best-run-seconds'
   private readonly scene = new THREE.Scene()
   private readonly camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 250)
   private readonly renderer = new THREE.WebGLRenderer({
@@ -52,10 +54,12 @@ export class VoxelSandboxGame {
   private readonly questProgressLabel = document.createElement('p')
   private readonly questList = document.createElement('ol')
   private readonly celebrationToast = document.createElement('div')
+  private readonly finishCard = document.createElement('section')
   private readonly hotbar = document.createElement('div')
   private readonly mobileBlockToggle = document.createElement('button')
   private readonly hotbarButtons: HTMLButtonElement[] = []
   private readonly completedMissions = new Set<KidMissionId>()
+  private readonly audio = new GameAudio()
   private currentTarget: VoxelHit | null = null
   private selectedSlot = 0
   private disposed = false
@@ -63,6 +67,10 @@ export class VoxelSandboxGame {
   private mobileIntroDismissed = false
   private mobileHotbarExpanded = false
   private celebrationTimer = 0
+  private runSeconds = 0
+  private courseFinished = false
+  private finishCardDismissed = false
+  private bestRunSeconds = Number.POSITIVE_INFINITY
 
   constructor(private readonly mountNode: HTMLElement) {
     this.mountNode.innerHTML = ''
@@ -86,6 +94,7 @@ export class VoxelSandboxGame {
 
     this.input = new InputController(() => this.player.controls.lock())
     this.mountNode.classList.toggle('touch-mode', this.input.isTouchMode())
+    this.bestRunSeconds = this.readBestRunSeconds()
 
     this.highlight.visible = false
     this.scene.add(this.highlight)
@@ -119,6 +128,7 @@ export class VoxelSandboxGame {
     this.player.controls.removeEventListener('unlock', this.syncLockState)
     this.highlight.geometry.dispose()
     ;(this.highlight.material as THREE.Material).dispose()
+    this.audio.dispose()
     this.player.avatar.dispose()
     this.playground.dispose()
     this.world.dispose()
@@ -235,6 +245,7 @@ export class VoxelSandboxGame {
           return
         }
 
+        this.audio.unlock()
         this.player.controls.lock()
       })
     }
@@ -277,7 +288,15 @@ export class VoxelSandboxGame {
     crosshair.className = 'crosshair'
     crosshair.innerHTML = '<span></span><span></span>'
 
-    hud.append(this.startCard, header, this.createQuestHud(), this.createCelebrationToast(), this.hotbar, crosshair)
+    hud.append(
+      this.startCard,
+      header,
+      this.createQuestHud(),
+      this.createCelebrationToast(),
+      this.createFinishCard(),
+      this.hotbar,
+      crosshair,
+    )
 
     if (touchMode) {
       hud.append(this.createMobileControls())
@@ -296,6 +315,7 @@ export class VoxelSandboxGame {
     button.textContent = touchMode ? 'START PLAYING' : 'CLICK TO PLAY'
     button.addEventListener('click', (event) => {
       event.stopPropagation()
+      this.audio.unlock()
 
       if (touchMode) {
         this.dismissMobileIntro()
@@ -329,6 +349,50 @@ export class VoxelSandboxGame {
     this.celebrationToast.className = 'celebration-toast'
     this.celebrationToast.setAttribute('aria-live', 'polite')
     return this.celebrationToast
+  }
+
+  private createFinishCard(): HTMLElement {
+    this.finishCard.className = 'finish-card'
+    this.finishCard.setAttribute('aria-live', 'polite')
+    this.finishCard.innerHTML = `
+      <p class="eyebrow">course clear</p>
+      <h2>Treasure Run Complete</h2>
+      <p class="finish-copy">You hit the orb and unlocked free build mode.</p>
+      <div class="finish-stats">
+        <article>
+          <span>Run Time</span>
+          <strong id="finish-run-time">--</strong>
+        </article>
+        <article>
+          <span>Best Time</span>
+          <strong id="finish-best-time">--</strong>
+        </article>
+      </div>
+      <div class="finish-actions">
+        <button id="finish-restart" class="start-button" type="button">PLAY AGAIN</button>
+        <button id="finish-continue" class="ghost-button" type="button">KEEP BUILDING</button>
+      </div>
+    `
+
+    const restartButton = this.finishCard.querySelector<HTMLButtonElement>('#finish-restart')
+    const continueButton = this.finishCard.querySelector<HTMLButtonElement>('#finish-continue')
+
+    restartButton?.addEventListener('click', () => {
+      window.location.reload()
+    })
+
+    continueButton?.addEventListener('click', () => {
+      this.finishCardDismissed = true
+      this.finishCard.classList.remove('visible')
+      this.showCelebration('Free build mode')
+
+      if (!this.input.isTouchMode() && !this.player.isLocked) {
+        this.audio.unlock()
+        this.player.controls.lock()
+      }
+    })
+
+    return this.finishCard
   }
 
   private updateTarget(): void {
@@ -386,6 +450,7 @@ export class VoxelSandboxGame {
       }
 
       this.world.setBlock(placePosition.x, placePosition.y, placePosition.z, nextBlock)
+      this.audio.play('place')
     }
   }
 
@@ -400,6 +465,7 @@ export class VoxelSandboxGame {
       : `Target: none | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal} | Bridge ${playgroundState.bridgePlaced}/${playgroundState.bridgeNeeded}`
     this.renderQuestHud()
     this.updateCelebrationToast()
+    this.finishCard.classList.toggle('visible', this.courseFinished && !this.finishCardDismissed)
   }
 
   private updateSelectedSlot(index: number): void {
@@ -432,11 +498,16 @@ export class VoxelSandboxGame {
     if (this.celebrationTimer > 0) {
       this.celebrationTimer = Math.max(0, this.celebrationTimer - deltaSeconds)
     }
+
+    if (!this.courseFinished && this.isRunActive()) {
+      this.runSeconds += deltaSeconds
+    }
   }
 
   private handlePlaygroundEvents(events: PlaygroundEvent[]): void {
     for (const event of events) {
       if (event.type === 'star-collected') {
+        this.audio.play('star')
         const firstStar = !this.completedMissions.has('star')
         this.completeMission('star')
 
@@ -450,14 +521,17 @@ export class VoxelSandboxGame {
       }
 
       if (event.type === 'pad-used') {
+        this.audio.play('boost')
         this.completeMission('pad')
       }
 
       if (event.type === 'ring-cleared') {
+        this.audio.play('ring')
         this.completeMission('ring')
       }
 
       if (event.type === 'crate-smashed') {
+        this.audio.play('smash')
         this.completeMission('crate')
       }
 
@@ -466,11 +540,13 @@ export class VoxelSandboxGame {
       }
 
       if (event.type === 'bridge-complete') {
+        this.audio.play('bridge')
         this.completeMission('bridge')
       }
 
       if (event.type === 'goal-reached') {
         this.completeMission('goal')
+        this.handleCourseFinished()
       }
     }
   }
@@ -511,11 +587,11 @@ export class VoxelSandboxGame {
     this.questProgressLabel.textContent =
       completeCount === KID_MISSIONS.length
         ? compactMode
-          ? 'All clear. Build anything.'
-          : 'All starter quests cleared. Free build unlocked. Keep collecting stars and building higher.'
+          ? `All clear | ${this.formatSeconds(this.runSeconds)}`
+          : `All starter quests cleared in ${this.formatSeconds(this.runSeconds)}. Free build unlocked.`
         : compactMode
-          ? `Next up | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
-          : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal} | Bridge ${playgroundState.bridgePlaced}/${playgroundState.bridgeNeeded}`
+          ? `Next up | ${this.formatSeconds(this.runSeconds)} | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
+          : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Time ${this.formatSeconds(this.runSeconds)} | Best ${this.formatBestTime()}`
 
     this.questList.innerHTML = missionsToRender.map((mission) => {
       const done = this.completedMissions.has(mission.id)
@@ -553,6 +629,9 @@ export class VoxelSandboxGame {
         loadedChunks: this.world.getLoadedChunkCount(),
         missionsComplete: this.completedMissions.size,
         missionsTotal: KID_MISSIONS.length,
+        runSeconds: Number(this.runSeconds.toFixed(3)),
+        bestRunSeconds: Number.isFinite(this.bestRunSeconds) ? Number(this.bestRunSeconds.toFixed(3)) : null,
+        courseFinished: this.courseFinished,
         playground: this.playground.getState(),
         player: {
           x: Number(this.player.position.x.toFixed(3)),
@@ -804,8 +883,72 @@ export class VoxelSandboxGame {
       return
     }
 
+    this.audio.unlock()
     this.mobileIntroDismissed = true
     this.syncLockState()
+  }
+
+  private isRunActive(): boolean {
+    return this.input.isTouchMode() ? this.mobileIntroDismissed : this.player.isLocked
+  }
+
+  private handleCourseFinished(): void {
+    if (this.courseFinished) {
+      return
+    }
+
+    this.courseFinished = true
+    this.finishCardDismissed = false
+    this.audio.play('victory')
+    this.bestRunSeconds = Math.min(this.bestRunSeconds, this.runSeconds)
+    this.persistBestRunSeconds(this.bestRunSeconds)
+    this.updateFinishCard()
+
+    if (!this.input.isTouchMode() && this.player.isLocked) {
+      this.player.controls.unlock()
+    }
+  }
+
+  private updateFinishCard(): void {
+    const runTime = this.finishCard.querySelector<HTMLElement>('#finish-run-time')
+    const bestTime = this.finishCard.querySelector<HTMLElement>('#finish-best-time')
+
+    if (runTime) {
+      runTime.textContent = this.formatSeconds(this.runSeconds)
+    }
+
+    if (bestTime) {
+      bestTime.textContent = this.formatBestTime()
+    }
+  }
+
+  private readBestRunSeconds(): number {
+    try {
+      const storedValue = window.localStorage.getItem(VoxelSandboxGame.BEST_RUN_STORAGE_KEY)
+
+      if (!storedValue) {
+        return Number.POSITIVE_INFINITY
+      }
+
+      const numericValue = Number(storedValue)
+      return Number.isFinite(numericValue) ? numericValue : Number.POSITIVE_INFINITY
+    } catch {
+      return Number.POSITIVE_INFINITY
+    }
+  }
+
+  private persistBestRunSeconds(value: number): void {
+    try {
+      window.localStorage.setItem(VoxelSandboxGame.BEST_RUN_STORAGE_KEY, value.toFixed(3))
+    } catch {}
+  }
+
+  private formatSeconds(value: number): string {
+    return `${value.toFixed(1)}s`
+  }
+
+  private formatBestTime(): string {
+    return Number.isFinite(this.bestRunSeconds) ? this.formatSeconds(this.bestRunSeconds) : 'new run'
   }
 
   private blockWouldOverlapPlayer(blockPosition: THREE.Vector3): boolean {

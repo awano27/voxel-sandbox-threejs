@@ -200,6 +200,95 @@ button {
   transform: translate(-50%, 0);
 }
 
+.finish-card {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  gap: 0.95rem;
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 1.4rem;
+  border: 1px solid rgb(255 255 255 / 0.26);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(135deg, rgb(17 29 45 / 0.94), rgb(25 37 24 / 0.92)),
+    rgb(11 16 22 / 0.9);
+  box-shadow: 0 28px 90px rgb(0 0 0 / 0.32);
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -48%);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.finish-card.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+
+.finish-card h2,
+.finish-copy {
+  margin: 0;
+}
+
+.finish-copy {
+  color: rgb(228 240 255 / 0.82);
+  line-height: 1.55;
+}
+
+.finish-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.finish-stats article {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 0.05);
+}
+
+.finish-stats span {
+  color: rgb(210 224 246 / 0.72);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.finish-stats strong {
+  font-family: 'Audiowide', sans-serif;
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  color: #fff4cb;
+}
+
+.finish-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.finish-actions .start-button {
+  min-height: 3rem;
+}
+
+.ghost-button {
+  min-height: 3rem;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 999px;
+  color: #e8f2ff;
+  background: rgb(255 255 255 / 0.06);
+  cursor: pointer;
+}
+
+.ghost-button:active {
+  transform: translateY(1px);
+}
+
 .badge {
   width: fit-content;
   padding: 0.25rem 0.55rem;
@@ -522,6 +611,17 @@ button {
 .touch-mode .celebration-toast {
   top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
   font-size: 0.82rem;
+}
+
+.touch-mode .finish-card {
+  top: calc(env(safe-area-inset-top, 0px) + 50%);
+  width: min(22rem, calc(100vw - 1.5rem));
+  padding: 1.1rem;
+}
+
+.touch-mode .finish-stats,
+.touch-mode .finish-actions {
+  grid-template-columns: 1fr;
 }
 
 .touch-mode .hotbar {
