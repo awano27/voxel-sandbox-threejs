@@ -12,10 +12,11 @@ try {
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().loadedChunks > 0)
   await page.mouse.click(800, 450)
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().locked === true)
-  await page.keyboard.press('KeyV')
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'third-person')
   await page.keyboard.press('KeyV')
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'first-person')
+  await page.keyboard.press('KeyV')
+  await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'third-person')
 
   const beforeMove = await readDebugState(page)
   await page.keyboard.down('KeyW')

@@ -25,8 +25,8 @@ export class Player {
   private readonly bodyPosition: THREE.Vector3
   private grounded = false
   private readonly lookEuler = new THREE.Euler(0, 0, 0, 'YXZ')
-  private cameraMode: CameraMode = 'first-person'
-  private readonly thirdPersonOffset = new THREE.Vector3(0, 0.9, 4.6)
+  private cameraMode: CameraMode = 'third-person'
+  private readonly thirdPersonOffset = new THREE.Vector3(0, 1.28, 3.55)
   private readonly thirdPersonCameraPosition = new THREE.Vector3()
 
   constructor(

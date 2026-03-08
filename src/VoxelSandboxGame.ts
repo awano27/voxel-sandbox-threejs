@@ -243,7 +243,7 @@ export class VoxelSandboxGame {
     this.lockBadge.className = 'badge'
     this.lockBadge.textContent = 'PAUSED'
     this.cameraLabel.className = 'camera-chip'
-    this.cameraLabel.textContent = 'FIRST PERSON'
+    this.cameraLabel.textContent = 'THIRD PERSON'
     this.chunkCounter.className = 'status-detail'
     this.chunkCounter.textContent = 'Chunks: 0'
     this.positionLabel.className = 'status-detail'

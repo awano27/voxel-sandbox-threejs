@@ -22,10 +22,11 @@ try {
     await page.waitForFunction(() => document.querySelector('.start-card')?.classList.contains('hidden') === true)
   }
 
-  await page.locator('#action-camera').click()
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'third-person')
   await page.locator('#action-camera').click()
   await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'first-person')
+  await page.locator('#action-camera').click()
+  await page.waitForFunction(() => window.__VOXEL_DEBUG__?.getState().cameraMode === 'third-person')
 
   const initialState = await readDebugState(page)
   await dragControl(page, '#look-zone', { x: -80, y: -36 }, 180)

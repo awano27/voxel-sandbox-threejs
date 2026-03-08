@@ -17,39 +17,62 @@ export class PlayerAvatar {
   private readonly rightArmPivot = new THREE.Group()
   private readonly leftLegPivot = new THREE.Group()
   private readonly rightLegPivot = new THREE.Group()
-  private readonly bodyMaterial = new THREE.MeshLambertMaterial({ color: '#2d74ff' })
-  private readonly accentMaterial = new THREE.MeshLambertMaterial({ color: '#f6d365' })
+  private readonly shadow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.44, 0.52, 0.04, 18),
+    new THREE.MeshLambertMaterial({ color: '#1f2d16', transparent: true, opacity: 0.34 }),
+  )
+  private readonly torsoMaterial = new THREE.MeshLambertMaterial({ color: '#2f7df6' })
+  private readonly sleeveMaterial = new THREE.MeshLambertMaterial({ color: '#1f5ec7' })
+  private readonly pantsMaterial = new THREE.MeshLambertMaterial({ color: '#2b3648' })
+  private readonly shoeMaterial = new THREE.MeshLambertMaterial({ color: '#1a1d24' })
   private readonly skinMaterial = new THREE.MeshLambertMaterial({ color: '#ffd7b1' })
+  private readonly hairMaterial = new THREE.MeshLambertMaterial({ color: '#3c2617' })
   private walkTime = 0
   private visualYaw = 0
 
   constructor() {
     this.root.name = 'player-avatar'
 
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.78, 0.34), this.bodyMaterial)
-    torso.position.y = 1.08
+    this.shadow.position.y = 0.02
 
-    const hips = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.38, 0.3), this.accentMaterial)
-    hips.position.y = 0.52
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.96, 0.46), this.torsoMaterial)
+    torso.position.y = 1.18
 
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.48), this.skinMaterial)
-    this.headPivot.position.y = 1.62
-    head.position.y = 0.24
-    this.headPivot.add(head)
+    const shirtHem = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.16, 0.48), this.sleeveMaterial)
+    shirtHem.position.y = 0.74
 
-    this.leftArmPivot.position.set(-0.48, 1.33, 0)
-    this.rightArmPivot.position.set(0.48, 1.33, 0)
-    this.leftLegPivot.position.set(-0.18, 0.71, 0)
-    this.rightLegPivot.position.set(0.18, 0.71, 0)
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.16), this.skinMaterial)
+    neck.position.y = 1.72
 
-    this.leftArmPivot.add(this.createLimb(this.bodyMaterial, 0.24, 0.72, 0.24))
-    this.rightArmPivot.add(this.createLimb(this.bodyMaterial, 0.24, 0.72, 0.24))
-    this.leftLegPivot.add(this.createLimb(this.accentMaterial, 0.24, 0.78, 0.24))
-    this.rightLegPivot.add(this.createLimb(this.accentMaterial, 0.24, 0.78, 0.24))
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), this.skinMaterial)
+    const hair = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.26, 0.68), this.hairMaterial)
+    const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.02), this.shoeMaterial)
+    const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.02), this.shoeMaterial)
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.02), this.shoeMaterial)
+
+    this.headPivot.position.y = 1.86
+    head.position.y = 0.31
+    hair.position.set(0, 0.55, 0)
+    leftEye.position.set(-0.12, 0.33, 0.32)
+    rightEye.position.set(0.12, 0.33, 0.32)
+    mouth.position.set(0, 0.16, 0.32)
+    this.headPivot.add(head, hair, leftEye, rightEye, mouth)
+
+    this.leftArmPivot.position.set(-0.64, 1.46, 0)
+    this.rightArmPivot.position.set(0.64, 1.46, 0)
+    this.leftLegPivot.position.set(-0.22, 0.78, 0)
+    this.rightLegPivot.position.set(0.22, 0.78, 0)
+
+    this.leftArmPivot.add(this.createArm())
+    this.rightArmPivot.add(this.createArm())
+    this.leftLegPivot.add(this.createLeg())
+    this.rightLegPivot.add(this.createLeg())
 
     this.root.add(
+      this.shadow,
       torso,
-      hips,
+      shirtHem,
+      neck,
       this.headPivot,
       this.leftArmPivot,
       this.rightArmPivot,
@@ -71,36 +94,63 @@ export class PlayerAvatar {
     this.visualYaw = dampAngle(this.visualYaw, desiredYaw, 10, state.deltaSeconds)
     this.root.rotation.y = this.visualYaw
 
-    const runStrength = THREE.MathUtils.clamp(state.horizontalSpeed / 4.6, 0, 1)
+    const runStrength = THREE.MathUtils.clamp(state.horizontalSpeed / 4.3, 0, 1)
 
     if (state.grounded) {
-      this.walkTime += state.deltaSeconds * (5 + runStrength * 9)
+      this.walkTime += state.deltaSeconds * (5.5 + runStrength * 9.5)
     } else {
-      this.walkTime += state.deltaSeconds * 4
+      this.walkTime += state.deltaSeconds * 4.2
     }
 
-    const swing = Math.sin(this.walkTime) * (0.22 + runStrength * 0.45)
-    const counterSwing = Math.sin(this.walkTime + Math.PI) * (0.22 + runStrength * 0.45)
-    const lift = state.grounded ? 0 : THREE.MathUtils.clamp(-state.verticalVelocity * 0.03, -0.22, 0.32)
-    const airborneTilt = state.grounded ? 0 : THREE.MathUtils.clamp(state.verticalVelocity * 0.035, -0.24, 0.2)
+    const swing = Math.sin(this.walkTime) * (0.18 + runStrength * 0.54)
+    const counterSwing = Math.sin(this.walkTime + Math.PI) * (0.18 + runStrength * 0.54)
+    const lift = state.grounded ? 0 : THREE.MathUtils.clamp(-state.verticalVelocity * 0.032, -0.24, 0.34)
+    const airborneTilt = state.grounded ? 0 : THREE.MathUtils.clamp(state.verticalVelocity * 0.036, -0.22, 0.24)
+    const bob = state.grounded ? Math.abs(Math.sin(this.walkTime * 0.5)) * runStrength * 0.04 : 0.04
 
-    this.leftArmPivot.rotation.x = swing - lift * 0.4
-    this.rightArmPivot.rotation.x = counterSwing - lift * 0.4
+    this.root.position.y += bob
+    this.shadow.scale.setScalar(1 - Math.min(0.2, Math.abs(lift) * 0.32))
+    this.headPivot.rotation.x = airborneTilt * 0.35
+    this.headPivot.rotation.z = -swing * 0.05
+    this.leftArmPivot.rotation.x = swing - lift * 0.28
+    this.rightArmPivot.rotation.x = counterSwing - lift * 0.28
     this.leftLegPivot.rotation.x = counterSwing + lift
     this.rightLegPivot.rotation.x = swing + lift
-    this.headPivot.rotation.x = airborneTilt * 0.35
   }
 
   dispose(): void {
-    this.bodyMaterial.dispose()
-    this.accentMaterial.dispose()
+    this.torsoMaterial.dispose()
+    this.sleeveMaterial.dispose()
+    this.pantsMaterial.dispose()
+    this.shoeMaterial.dispose()
     this.skinMaterial.dispose()
+    this.hairMaterial.dispose()
+    ;(this.shadow.material as THREE.Material).dispose()
+    this.root.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.geometry.dispose()
+      }
+    })
   }
 
-  private createLimb(material: THREE.Material, width: number, height: number, depth: number): THREE.Mesh {
-    const limb = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material)
-    limb.position.y = -height / 2
-    return limb
+  private createArm(): THREE.Group {
+    const group = new THREE.Group()
+    const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), this.sleeveMaterial)
+    sleeve.position.y = -0.14
+    const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.5, 0.26), this.skinMaterial)
+    forearm.position.y = -0.52
+    group.add(sleeve, forearm)
+    return group
+  }
+
+  private createLeg(): THREE.Group {
+    const group = new THREE.Group()
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.68, 0.3), this.pantsMaterial)
+    leg.position.y = -0.34
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.38), this.shoeMaterial)
+    shoe.position.set(0, -0.72, 0.04)
+    group.add(leg, shoe)
+    return group
   }
 }
 
