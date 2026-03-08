@@ -8,7 +8,7 @@ import { HOTBAR_BLOCKS, getBlockDefinition, BlockId } from './world/BlockTypes'
 import { traceVoxelRay, type VoxelHit } from './world/DDA'
 import { World } from './world/World'
 
-type KidMissionId = 'star' | 'pad' | 'break' | 'place' | 'goal'
+type KidMissionId = 'star' | 'pad' | 'ring' | 'crate' | 'bridge' | 'goal'
 
 interface KidMission {
   id: KidMissionId
@@ -17,11 +17,12 @@ interface KidMission {
 }
 
 const KID_MISSIONS: KidMission[] = [
-  { id: 'star', title: 'Catch a star', hint: 'Follow the glowing trail in front of spawn.' },
-  { id: 'pad', title: 'Ride the jump pad', hint: 'Step on the orange launch pad and get boosted.' },
-  { id: 'break', title: 'Break 1 block', hint: 'Aim at any block and use BREAK or left click.' },
-  { id: 'place', title: 'Place 1 block', hint: 'Use PLACE or right click to build something small.' },
-  { id: 'goal', title: 'Reach the sky orb', hint: 'Collect all stars, then run to the glowing tower.' },
+  { id: 'star', title: 'Catch a star', hint: 'Grab one of the glowing stars on the path.' },
+  { id: 'pad', title: 'Ride the jump pad', hint: 'Step on the orange launch pad and get tossed forward.' },
+  { id: 'ring', title: 'Fly through the sky ring', hint: 'Use the jump pad and pass through the blue ring.' },
+  { id: 'crate', title: 'Smash the party crate', hint: 'Break the bright crate near the end of the path.' },
+  { id: 'bridge', title: 'Build the tiny bridge', hint: 'Place 2 blocks in the glowing bridge slots.' },
+  { id: 'goal', title: 'Reach the party orb', hint: 'Finish the course and run to the glowing orb tower.' },
 ]
 
 export class VoxelSandboxGame {
@@ -166,8 +167,8 @@ export class VoxelSandboxGame {
     const touchMode = this.input.isTouchMode()
     const title = touchMode ? 'Treasure Run Starts Here' : 'Click Into Treasure Run'
     const intro = touchMode
-      ? 'Follow the star trail, ride the jump pad, then smash, build, and race to the sky orb.'
-      : 'Start with a quick treasure run: collect stars, hit the jump pad, then build and sprint for the sky orb.'
+      ? 'Grab stars, fly through the ring, smash the crate, build a mini bridge, and finish at the orb.'
+      : 'Start with a mini obstacle run: collect stars, launch through the ring, smash the crate, build a tiny bridge, and sprint for the orb.'
     const controls = touchMode
       ? `
         <li>Left stick: Move</li>
@@ -193,8 +194,8 @@ export class VoxelSandboxGame {
         <p>${intro}</p>
         <ol class="quick-start-list">
           <li>Follow the stars</li>
-          <li>Jump on the orange pad</li>
-          <li>Use BREAK and PLACE when you feel ready</li>
+          <li>Fly through the ring</li>
+          <li>Smash the crate and build the bridge</li>
         </ol>
       `
       : `
@@ -206,15 +207,15 @@ export class VoxelSandboxGame {
             <h2>First 30 Seconds</h2>
             <ol class="howto-steps">
               <li>Click to lock in, then follow the stars.</li>
-              <li>Step on the glowing jump pad for a quick lift.</li>
-              <li>Break one block and place one block to finish the basics.</li>
+              <li>Use the jump pad to fly through the sky ring.</li>
+              <li>Smash the crate, build the mini bridge, and sprint to the orb.</li>
             </ol>
           </section>
           <section class="howto-card">
             <h2>What Is New</h2>
             <ul class="feature-list">
-              <li>Five floating stars are waiting right in front of spawn.</li>
-              <li>The launch pad throws you forward for an instant smile.</li>
+              <li>A toy-course now runs straight out from spawn.</li>
+              <li>The launch pad and sky ring make the first jump feel like a stunt.</li>
               <li>Press V to watch your hero in third person.</li>
             </ul>
           </section>
@@ -307,8 +308,8 @@ export class VoxelSandboxGame {
     const note = document.createElement('p')
     note.className = 'start-note'
     note.textContent = touchMode
-      ? 'Tap once to begin. Move with the left stick, look on the right, and ignore the rest until you want to build.'
-      : 'Click once to begin. The stars, jump pad, and sky orb are all placed right ahead of spawn.'
+      ? 'Tap once to begin. Move with the left stick, look on the right, and follow the course in order.'
+      : 'Click once to begin. The whole obstacle course starts right ahead of spawn.'
 
     actions.append(button, note)
     return actions
@@ -365,7 +366,6 @@ export class VoxelSandboxGame {
         this.currentTarget.block.z,
         BlockId.Air,
       )
-      this.completeMission('break')
     }
 
     if (this.input.consumeSecondaryAction()) {
@@ -386,7 +386,6 @@ export class VoxelSandboxGame {
       }
 
       this.world.setBlock(placePosition.x, placePosition.y, placePosition.z, nextBlock)
-      this.completeMission('place')
     }
   }
 
@@ -397,8 +396,8 @@ export class VoxelSandboxGame {
     this.chunkCounter.textContent = `Chunks: ${this.world.getLoadedChunkCount()}`
     this.positionLabel.textContent = `Pos: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`
     this.targetLabel.textContent = this.currentTarget
-      ? `Target: ${this.currentTarget.block.x}, ${this.currentTarget.block.y}, ${this.currentTarget.block.z} | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
-      : `Target: none | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
+      ? `Target: ${this.currentTarget.block.x}, ${this.currentTarget.block.y}, ${this.currentTarget.block.z} | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal} | Bridge ${playgroundState.bridgePlaced}/${playgroundState.bridgeNeeded}`
+      : `Target: none | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal} | Bridge ${playgroundState.bridgePlaced}/${playgroundState.bridgeNeeded}`
     this.renderQuestHud()
     this.updateCelebrationToast()
   }
@@ -447,11 +446,27 @@ export class VoxelSandboxGame {
       }
 
       if (event.type === 'all-stars-collected') {
-        this.showCelebration('All stars collected. Run to the sky orb!')
+        this.showCelebration('All stars collected')
       }
 
       if (event.type === 'pad-used') {
         this.completeMission('pad')
+      }
+
+      if (event.type === 'ring-cleared') {
+        this.completeMission('ring')
+      }
+
+      if (event.type === 'crate-smashed') {
+        this.completeMission('crate')
+      }
+
+      if (event.type === 'bridge-progress') {
+        this.showCelebration(`Bridge ${event.placed}/${event.total}`)
+      }
+
+      if (event.type === 'bridge-complete') {
+        this.completeMission('bridge')
       }
 
       if (event.type === 'goal-reached') {
@@ -500,7 +515,7 @@ export class VoxelSandboxGame {
           : 'All starter quests cleared. Free build unlocked. Keep collecting stars and building higher.'
         : compactMode
           ? `Next up | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
-          : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal}`
+          : `${completeCount}/${KID_MISSIONS.length} starter quests cleared | Stars ${playgroundState.starsCollected}/${playgroundState.starsTotal} | Bridge ${playgroundState.bridgePlaced}/${playgroundState.bridgeNeeded}`
 
     this.questList.innerHTML = missionsToRender.map((mission) => {
       const done = this.completedMissions.has(mission.id)
