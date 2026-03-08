@@ -4,7 +4,7 @@
 
 公開 URL: https://awano27.github.io/voxel-sandbox-threejs/
 
-![Gameplay screenshot](./docs/local-playwright-check.png)
+![Gameplay screenshot](./docs/public-playwright-check.png)
 
 ## Features
 
