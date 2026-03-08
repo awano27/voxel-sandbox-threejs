@@ -213,6 +213,10 @@ export class Playground {
     }
   }
 
+  getGoalPosition(): THREE.Vector3 {
+    return this.goalPosition.clone()
+  }
+
   private stampCourse(): void {
     const trail = [
       [0, 1, BlockId.Glass],

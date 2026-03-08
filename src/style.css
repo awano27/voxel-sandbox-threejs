@@ -240,7 +240,7 @@ button {
 
 .finish-stats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
@@ -288,6 +288,46 @@ button {
 .ghost-button:active {
   transform: translateY(1px);
 }
+
+.boost-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.boost-overlay span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(28vw, 16rem);
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.9), transparent);
+  transform-origin: left center;
+  opacity: 0;
+}
+
+.boost-overlay.active {
+  opacity: calc(0.2 + min(var(--boost-strength), 1) * 0.75);
+}
+
+.boost-overlay.active span {
+  opacity: 1;
+}
+
+.boost-overlay span:nth-child(1) { transform: translate(-50%, -50%) rotate(-78deg) translateX(8rem); }
+.boost-overlay span:nth-child(2) { transform: translate(-50%, -50%) rotate(-54deg) translateX(10rem); }
+.boost-overlay span:nth-child(3) { transform: translate(-50%, -50%) rotate(-30deg) translateX(12rem); }
+.boost-overlay span:nth-child(4) { transform: translate(-50%, -50%) rotate(-12deg) translateX(13rem); }
+.boost-overlay span:nth-child(5) { transform: translate(-50%, -50%) rotate(8deg) translateX(12rem); }
+.boost-overlay span:nth-child(6) { transform: translate(-50%, -50%) rotate(24deg) translateX(12rem); }
+.boost-overlay span:nth-child(7) { transform: translate(-50%, -50%) rotate(40deg) translateX(11rem); }
+.boost-overlay span:nth-child(8) { transform: translate(-50%, -50%) rotate(58deg) translateX(10rem); }
+.boost-overlay span:nth-child(9) { transform: translate(-50%, -50%) rotate(74deg) translateX(8rem); }
+.boost-overlay span:nth-child(10) { transform: translate(-50%, -50%) rotate(90deg) translateX(6rem); }
 
 .badge {
   width: fit-content;
@@ -622,6 +662,10 @@ button {
 .touch-mode .finish-stats,
 .touch-mode .finish-actions {
   grid-template-columns: 1fr;
+}
+
+.touch-mode .boost-overlay {
+  display: none;
 }
 
 .touch-mode .hotbar {

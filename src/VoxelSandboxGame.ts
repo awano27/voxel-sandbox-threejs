@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import Stats from 'stats.js'
 import { MAX_INTERACTION_DISTANCE, PLAYER_EYE_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT } from './constants'
 import { GameAudio } from './gameplay/GameAudio'
+import { FeedbackEffects } from './gameplay/FeedbackEffects'
 import { Playground, type PlaygroundEvent } from './gameplay/Playground'
 import { InputController } from './player/InputController'
 import { Player } from './player/Player'
@@ -55,11 +56,13 @@ export class VoxelSandboxGame {
   private readonly questList = document.createElement('ol')
   private readonly celebrationToast = document.createElement('div')
   private readonly finishCard = document.createElement('section')
+  private readonly boostOverlay = document.createElement('div')
   private readonly hotbar = document.createElement('div')
   private readonly mobileBlockToggle = document.createElement('button')
   private readonly hotbarButtons: HTMLButtonElement[] = []
   private readonly completedMissions = new Set<KidMissionId>()
   private readonly audio = new GameAudio()
+  private readonly effects: FeedbackEffects
   private currentTarget: VoxelHit | null = null
   private selectedSlot = 0
   private disposed = false
@@ -67,6 +70,7 @@ export class VoxelSandboxGame {
   private mobileIntroDismissed = false
   private mobileHotbarExpanded = false
   private celebrationTimer = 0
+  private boostOverlayTimer = 0
   private runSeconds = 0
   private courseFinished = false
   private finishCardDismissed = false
@@ -90,6 +94,7 @@ export class VoxelSandboxGame {
     this.player = new Player(this.camera, this.renderer.domElement, this.world.getSpawnPoint())
     this.world.primeAround(this.player.position)
     this.playground = new Playground(this.scene, this.world, this.player.position)
+    this.effects = new FeedbackEffects(this.scene)
     this.scene.add(this.player.avatar.root)
 
     this.input = new InputController(() => this.player.controls.lock())
@@ -129,6 +134,7 @@ export class VoxelSandboxGame {
     this.highlight.geometry.dispose()
     ;(this.highlight.material as THREE.Material).dispose()
     this.audio.dispose()
+    this.effects.dispose()
     this.player.avatar.dispose()
     this.playground.dispose()
     this.world.dispose()
@@ -159,6 +165,7 @@ export class VoxelSandboxGame {
     this.updateTarget()
     this.applyBlockEditing()
     this.updateHud()
+    this.effects.update(deltaSeconds)
     this.input.endFrame()
     this.renderer.render(this.scene, this.camera)
     this.stats.end()
@@ -294,6 +301,7 @@ export class VoxelSandboxGame {
       this.createQuestHud(),
       this.createCelebrationToast(),
       this.createFinishCard(),
+      this.createBoostOverlay(),
       this.hotbar,
       crosshair,
     )
@@ -367,6 +375,10 @@ export class VoxelSandboxGame {
           <span>Best Time</span>
           <strong id="finish-best-time">--</strong>
         </article>
+        <article>
+          <span>Rank</span>
+          <strong id="finish-rank">--</strong>
+        </article>
       </div>
       <div class="finish-actions">
         <button id="finish-restart" class="start-button" type="button">PLAY AGAIN</button>
@@ -393,6 +405,12 @@ export class VoxelSandboxGame {
     })
 
     return this.finishCard
+  }
+
+  private createBoostOverlay(): HTMLElement {
+    this.boostOverlay.className = 'boost-overlay'
+    this.boostOverlay.innerHTML = Array.from({ length: 10 }, () => '<span></span>').join('')
+    return this.boostOverlay
   }
 
   private updateTarget(): void {
@@ -451,6 +469,7 @@ export class VoxelSandboxGame {
 
       this.world.setBlock(placePosition.x, placePosition.y, placePosition.z, nextBlock)
       this.audio.play('place')
+      this.spawnPlacementBurst(placePosition)
     }
   }
 
@@ -466,6 +485,8 @@ export class VoxelSandboxGame {
     this.renderQuestHud()
     this.updateCelebrationToast()
     this.finishCard.classList.toggle('visible', this.courseFinished && !this.finishCardDismissed)
+    this.boostOverlay.classList.toggle('active', this.boostOverlayTimer > 0)
+    this.boostOverlay.style.setProperty('--boost-strength', this.boostOverlayTimer.toFixed(2))
   }
 
   private updateSelectedSlot(index: number): void {
@@ -499,6 +520,10 @@ export class VoxelSandboxGame {
       this.celebrationTimer = Math.max(0, this.celebrationTimer - deltaSeconds)
     }
 
+    if (this.boostOverlayTimer > 0) {
+      this.boostOverlayTimer = Math.max(0, this.boostOverlayTimer - deltaSeconds)
+    }
+
     if (!this.courseFinished && this.isRunActive()) {
       this.runSeconds += deltaSeconds
     }
@@ -508,6 +533,16 @@ export class VoxelSandboxGame {
     for (const event of events) {
       if (event.type === 'star-collected') {
         this.audio.play('star')
+        this.effects.spawnBurst({
+          count: 12,
+          origin: this.player.position.clone().add(new THREE.Vector3(0, 0.2, 0)),
+          colors: ['#ffe56f', '#fff7c2', '#ffd166'],
+          speed: [2.4, 4.8],
+          spread: 0.65,
+          lifetime: [0.45, 0.8],
+          scale: [0.08, 0.14],
+          gravity: 6,
+        })
         const firstStar = !this.completedMissions.has('star')
         this.completeMission('star')
 
@@ -522,16 +557,47 @@ export class VoxelSandboxGame {
 
       if (event.type === 'pad-used') {
         this.audio.play('boost')
+        this.boostOverlayTimer = Math.max(this.boostOverlayTimer, 0.65)
+        this.effects.spawnBurst({
+          count: 18,
+          origin: this.player.position.clone().add(new THREE.Vector3(0, -1.1, 0)),
+          colors: ['#ff8d5c', '#ffd166', '#fff4cb'],
+          speed: [3.2, 6.2],
+          spread: 0.85,
+          lifetime: [0.38, 0.72],
+          scale: [0.1, 0.18],
+          gravity: 7,
+        })
         this.completeMission('pad')
       }
 
       if (event.type === 'ring-cleared') {
         this.audio.play('ring')
+        this.effects.spawnBurst({
+          count: 18,
+          origin: this.player.position.clone().add(new THREE.Vector3(0, 0.2, 0)),
+          colors: ['#8fe9ff', '#b8f0ff', '#ffffff'],
+          speed: [3, 5.2],
+          spread: 0.95,
+          lifetime: [0.45, 0.82],
+          scale: [0.08, 0.14],
+          gravity: 5,
+        })
         this.completeMission('ring')
       }
 
       if (event.type === 'crate-smashed') {
         this.audio.play('smash')
+        this.effects.spawnBurst({
+          count: 22,
+          origin: this.player.position.clone().add(new THREE.Vector3(0, -0.3, 0)),
+          colors: ['#ff6b6b', '#ffd166', '#8fe388', '#8fe9ff', '#ffffff'],
+          speed: [2.8, 5.5],
+          spread: 1.15,
+          lifetime: [0.55, 0.95],
+          scale: [0.1, 0.16],
+          gravity: 8,
+        })
         this.completeMission('crate')
       }
 
@@ -541,6 +607,16 @@ export class VoxelSandboxGame {
 
       if (event.type === 'bridge-complete') {
         this.audio.play('bridge')
+        this.effects.spawnBurst({
+          count: 16,
+          origin: this.player.position.clone().add(new THREE.Vector3(0, -0.6, 0)),
+          colors: ['#9df0b8', '#fff4cb', '#8fe9ff'],
+          speed: [2.2, 4.6],
+          spread: 0.9,
+          lifetime: [0.55, 0.88],
+          scale: [0.08, 0.14],
+          gravity: 6,
+        })
         this.completeMission('bridge')
       }
 
@@ -900,6 +976,17 @@ export class VoxelSandboxGame {
     this.courseFinished = true
     this.finishCardDismissed = false
     this.audio.play('victory')
+    this.boostOverlayTimer = Math.max(this.boostOverlayTimer, 1.2)
+    this.effects.spawnBurst({
+      count: 34,
+      origin: this.playground.getGoalPosition().add(new THREE.Vector3(0, 0.3, 0)),
+      colors: ['#ffe56f', '#ff8d5c', '#8fe9ff', '#9df0b8', '#ffffff'],
+      speed: [3.4, 6.8],
+      spread: 1.6,
+      lifetime: [0.75, 1.2],
+      scale: [0.1, 0.18],
+      gravity: 5,
+    })
     this.bestRunSeconds = Math.min(this.bestRunSeconds, this.runSeconds)
     this.persistBestRunSeconds(this.bestRunSeconds)
     this.updateFinishCard()
@@ -912,6 +999,7 @@ export class VoxelSandboxGame {
   private updateFinishCard(): void {
     const runTime = this.finishCard.querySelector<HTMLElement>('#finish-run-time')
     const bestTime = this.finishCard.querySelector<HTMLElement>('#finish-best-time')
+    const rank = this.finishCard.querySelector<HTMLElement>('#finish-rank')
 
     if (runTime) {
       runTime.textContent = this.formatSeconds(this.runSeconds)
@@ -919,6 +1007,10 @@ export class VoxelSandboxGame {
 
     if (bestTime) {
       bestTime.textContent = this.formatBestTime()
+    }
+
+    if (rank) {
+      rank.textContent = this.getRunRank()
     }
   }
 
@@ -949,6 +1041,35 @@ export class VoxelSandboxGame {
 
   private formatBestTime(): string {
     return Number.isFinite(this.bestRunSeconds) ? this.formatSeconds(this.bestRunSeconds) : 'new run'
+  }
+
+  private getRunRank(): string {
+    if (this.runSeconds <= 18) {
+      return 'S'
+    }
+
+    if (this.runSeconds <= 24) {
+      return 'A'
+    }
+
+    if (this.runSeconds <= 32) {
+      return 'B'
+    }
+
+    return 'C'
+  }
+
+  private spawnPlacementBurst(blockPosition: THREE.Vector3): void {
+    this.effects.spawnBurst({
+      count: 8,
+      origin: new THREE.Vector3(blockPosition.x + 0.5, blockPosition.y + 0.5, blockPosition.z + 0.5),
+      colors: ['#fff4cb', '#8fe9ff', '#9df0b8'],
+      speed: [1.4, 3],
+      spread: 0.35,
+      lifetime: [0.28, 0.5],
+      scale: [0.05, 0.1],
+      gravity: 6,
+    })
   }
 
   private blockWouldOverlapPlayer(blockPosition: THREE.Vector3): boolean {
